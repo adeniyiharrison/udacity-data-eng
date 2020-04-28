@@ -1,18 +1,20 @@
+from sql_queries import *
+
 import os
 import glob
 import psycopg2
 import pandas as pd
-from sql_queries import (
-    song_select,
-    song_table_insert,
-    artist_table_insert,
-    time_table_insert,
-    user_table_insert,
-    songplay_table_insert
-)
 
 
 def process_song_file(cur, filepath):
+    """
+        Process song file and insert record into
+        song and artist tables
+
+        Aguements:
+            cur: psycopg2 cursor
+            filepath: Filepath to song file
+    """
     # open song file
     df = pd.read_json(
         filepath,
@@ -46,9 +48,19 @@ def process_song_file(cur, filepath):
         ]]
     )
 
+    print("process_song_long_file completed..")
+
 
 def process_log_file(cur, filepath):
-    # open log file
+    """
+        Process Log file and insert records to the
+        timestamps, users and songplays tables
+
+        Aguements:
+            cur: psycopg2 cursor
+            filepath: Filepath to log file
+    """
+
     df = pd.read_json(
         filepath,
         lines=True
@@ -59,9 +71,7 @@ def process_log_file(cur, filepath):
     df["userId"] = df["userId"].astype(int)
 
     for col in ["artist", "song"]:
-        df[col] = df[col].apply(
-            lambda x: x.replace("'", "") if x else None
-        )
+        df[col] = df[col].apply(lambda x: x.replace("'", "") if x else None)
 
     # insert time data records
     time_df = pd.DataFrame()
@@ -120,10 +130,21 @@ def process_log_file(cur, filepath):
 
 
 def process_data(cur, conn, filepath, func):
+    """
+        High level function to use the func parameter
+        to process the filepath data
+
+        Aguements:
+            cur: psycopg2 cursor
+            conn: psycopg2 connection
+            filepath: Filepath to song or log file
+            func: Function to be used for processing
+    """
+
     # get all files matching extension from directory
     all_files = []
     for root, dirs, files in os.walk(filepath):
-        files = glob.glob(os.path.join(root, "*.json"))
+        files = glob.glob(os.path.join(root, '*.json'))
         for f in files:
             all_files.append(os.path.abspath(f))
 

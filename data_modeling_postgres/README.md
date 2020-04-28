@@ -47,6 +47,64 @@ And below is an example of what the data in a log file, 2018-11-12-events.json, 
 
 ![log-data](img/log-data.png)
 
+### Schema
+
+___Songplays___
+| Column Name | Data Type                                        |
+|-------------|--------------------------------------------------|
+| Songplay_id | int |
+| start_time  | timestamp                                        |
+| user_id     | int                                              |
+| level       | varchar                                          |
+| song_id     | varchar                                          |
+| artist_id   | varchar                                          |
+| session_id  | int                                              |
+| location    | varchar                                          |
+| user_agent  | varchar                                          |
+
+___users___
+| Column Name | Data Type |
+|-------------|-----------|
+| user_id     | int       |
+| first_name  | varchar   |
+| last_name   | varchar   |
+| gender      | varchar   |
+| level       | varchar   |
+
+___songs___
+| Column Name | Data Type |
+|-------------|-----------|
+| song_id     | varchar   |
+| title       | varchar   |
+| artist_id   | varchar   |
+| year        | int       |
+| duration    | float     |
+
+___artists___
+| Column Name | Data Type |
+|-------------|-----------|
+| artist_id   | varchar   |
+| name        | varchar   |
+| location    | varchar   |
+| latitude    | float     |
+| longitude   | float     |
+
+___timestamps___
+| Column Name | Data Type |
+|-------------|-----------|
+| start_time  | timestamp |
+| hour        | int       |
+| day         | int       |
+| week        | int       |
+| month       | int       |
+| year        | int       |
+| weekday     | int       |
+
+
+### Special Cases
+* When duplicates found in `users`, the table will keep the lastest `level` value and the existing value will be replaced.
+* Potential duplicates to be added into the other tables will be ignored.
+
 ### Running Job/Script
 1. Call `python create_tables.py` in the terminal to prep tables
 2. Then ultimately `python etl.py` to populate tables

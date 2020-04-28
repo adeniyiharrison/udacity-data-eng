@@ -35,7 +35,7 @@ songplay_table_create = (
         CREATE SEQUENCE IF NOT EXISTS songplay_seq;
 
         CREATE TABLE songplays (
-            songplay_id integer NOT NULL DEFAULT nextval('songplay_seq'),
+            songplay_id integer NOT NULL DEFAULT nextval('songplay_seq') ,
             start_time timestamp,
             user_id int,
             level varchar,
@@ -52,10 +52,10 @@ user_table_create = (
     """
         CREATE TABLE users (
             user_id int PRIMARY KEY,
-            first_name varchar,
-            last_name varchar,
+            first_name varchar NOT NULL,
+            last_name varchar NOT NULL,
             gender varchar,
-            level varchar
+            level varchar NOT NULL
         )
     """
 )
@@ -64,8 +64,8 @@ song_table_create = (
     """
         CREATE TABLE songs (
             song_id varchar PRIMARY KEY,
-            title varchar,
-            artist_id varchar,
+            title varchar NOT NULL,
+            artist_id varchar NOT NULL,
             year integer,
             duration float
         )
@@ -76,7 +76,7 @@ artist_table_create = (
     """
         CREATE TABLE artists (
             artist_id varchar PRIMARY KEY,
-            name varchar,
+            name varchar NOT NULL,
             location varchar,
             latitude float,
             longitude float
@@ -87,13 +87,13 @@ artist_table_create = (
 time_table_create = (
     """
         CREATE TABLE timestamps (
-            start_time timestamp,
-            hour integer,
-            day integer,
-            week integer,
-            month integer,
-            year integer,
-            weekday integer
+            start_time timestamp PRIMARY KEY,
+            hour integer NOT NULL,
+            day integer NOT NULL,
+            week integer NOT NULL,
+            month integer NOT NULL,
+            year integer NOT NULL,
+            weekday integer NOT NULL
         )
     """
 )
@@ -122,7 +122,8 @@ user_table_insert = (
     """
         INSERT INTO users VALUES
         (%s, %s, %s, %s, %s)
-        ON CONFLICT DO NOTHING;
+        ON CONFLICT (user_id)
+        DO UPDATE SET level=EXCLUDED.level;
     """
 )
 
@@ -146,7 +147,8 @@ artist_table_insert = (
 time_table_insert = (
     """
         INSERT INTO timestamps VALUES
-        (%s, %s, %s, %s, %s, %s, %s);
+        (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING;
     """)
 
 # FIND SONGS
@@ -168,17 +170,10 @@ song_select = (
 # QUERY LISTS
 
 create_table_queries = [
-    songplay_table_create,
-    user_table_create,
-    song_table_create,
-    artist_table_create,
-    time_table_create
+    songplay_table_create, user_table_create, song_table_create,
+    artist_table_create, time_table_create
 ]
-
 drop_table_queries = [
-    songplay_table_drop,
-    user_table_drop,
-    song_table_drop,
-    artist_table_drop,
-    time_table_drop
+    songplay_table_drop, user_table_drop, song_table_drop,
+    artist_table_drop, time_table_drop
 ]

@@ -36,6 +36,11 @@ def create_database():
 def drop_tables(cur, conn):
     """
     Drops each table using the queries in `drop_table_queries` list.
+
+    Aguements:
+        cur: psycopg2 cursor
+        conn: psycopg2 connection
+
     """
     for query in drop_table_queries:
         cur.execute(query)
@@ -44,7 +49,12 @@ def drop_tables(cur, conn):
 
 def create_tables(cur, conn):
     """
-    Creates each table using the queries in `create_table_queries` list. 
+    Creates each table using the queries in `create_table_queries` list.
+
+    Aguements:
+        cur: psycopg2 cursor
+        conn: psycopg2 connection
+
     """
     for query in create_table_queries:
         cur.execute(query)
@@ -60,7 +70,7 @@ def main():
 
     - Drops all the tables.
 
-    - Creates all tables needed.
+    - Creates all tables needed. 
 
     - Finally, closes the connection.
     """
@@ -68,6 +78,9 @@ def main():
 
     drop_tables(cur, conn)
     create_tables(cur, conn)
+
+    print("create_tables.py completed..")
+
     conn.close()
 
 
