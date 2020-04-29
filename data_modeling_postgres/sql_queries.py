@@ -32,10 +32,8 @@ time_table_drop = (
 
 songplay_table_create = (
     """
-        CREATE SEQUENCE IF NOT EXISTS songplay_seq;
-
         CREATE TABLE songplays (
-            songplay_id integer NOT NULL DEFAULT nextval('songplay_seq') ,
+            songplay_id serial PRIMARY KEY,
             start_time timestamp,
             user_id int,
             level varchar,
