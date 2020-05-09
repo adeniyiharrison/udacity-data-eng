@@ -1,4 +1,4 @@
-# Project 1: Data modeling with Postgres
+# Project 3: Data Warehousing
 
 ### Introduction
 
