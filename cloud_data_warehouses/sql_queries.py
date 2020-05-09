@@ -31,7 +31,7 @@ staging_events_table_create = (
             sessionId INTEGER,
             song VARCHAR,
             status INTEGER,
-            ts VARCHAR,
+            ts BIGINT,
             userAgent VARCHAR,
             userId INTEGER
         );
@@ -58,7 +58,7 @@ staging_songs_table_create = (
 songplay_table_create = (
     """
         CREATE TABLE songplays (
-            songplay_id IDENTITY(0,1) PRIMARY KEY,
+            songplay_id INTEGER IDENTITY(0,1),
             start_time TIMESTAMP,
             user_id INTEGER,
             level VARCHAR,
@@ -126,26 +126,26 @@ time_table_create = (
 staging_events_copy = (
     """
         COPY staging_events
-        FROM '{log_data}'
+        FROM {log_data}
         IAM_ROLE '{iam}'
-        JSON '{json_path}'
+        JSON {json_path}
     """
 ).format(
     log_data=config.get("S3", "LOG_DATA"),
-    iam=config.get("AWS", "DWH_ROLE_ARN"),
-    json_path=config.get("AWS", "LOG_JSONPATH")
+    json_path=config.get("S3", "LOG_JSONPATH"),
+    iam=config.get("DWH", "DWH_ROLE_ARN")
 )
 
 staging_songs_copy = (
     """
         COPY staging_songs
-        FROM '{song_data}'
+        FROM {song_data}
         IAM_ROLE '{iam}'
         JSON 'auto';
     """
 ).format(
     song_data=config.get("S3", "SONG_DATA"),
-    iam=config.get("AWS", "DWH_ROLE_ARN")
+    iam=config.get("DWH", "DWH_ROLE_ARN")
 )
 
 # FINAL TABLES
@@ -163,7 +163,7 @@ songplay_table_insert = (
             user_agent
         )(
             SELECT
-                timestamp 'epoch' + e.ts * interval '1 second' AS start_time,
+                TIMESTAMP 'epoch' + e.ts::INT8/1000 * INTERVAL '1 second' AS start_time,
                 e.userID AS user_id,
                 e.level,
                 s.song_id AS song_id,
@@ -175,7 +175,8 @@ songplay_table_insert = (
             LEFT JOIN staging_songs s
                 ON e.song = s.title
                 AND e.artist = s.artist_name
-            WHERE e.song IS NOT NULL
+            WHERE e.ts IS NOT NULL
+                AND e.song IS NOT NULL
         );
     """)
 
@@ -189,16 +190,27 @@ user_table_insert = (
             level
         )(
             SELECT
-                userId AS user_id,
-                firstName AS first_name,
-                lastName AS last_name,
+                user_id,
+                first_name,
+                last_name,
                 gender,
                 level
-            FROM staging_events
-            WHERE userId IS NOT NULL
-                AND firstName IS NOT NULL
-                AND lastName IS NOT NULL
-                AND level IS NOT NULL
+            FROM (
+                SELECT
+                    userId AS user_id,
+                    firstName AS first_name,
+                    lastName AS last_name,
+                    gender,
+                    level,
+                    row_number() OVER (PARTITION BY user_id ORDER BY ts) AS user_id_ranked
+                FROM staging_events
+                WHERE userId IS NOT NULL
+                    AND firstName IS NOT NULL
+                    AND lastName IS NOT NULL
+                    AND level IS NOT NULL
+                ) AS ranked
+            WHERE ranked.user_id_ranked = 1
+
         );
     """
 )
@@ -218,10 +230,21 @@ song_table_insert = (
                 artist_id,
                 year,
                 duration
-            FROM staging_songs
-            WHERE song_id IS NOT NULL
-                AND title IS NOT NULL
-                AND artist_id IS NOT NULL
+            FROM (
+                SELECT 
+                    song_id,
+                    title,
+                    artist_id,
+                    year,
+                    duration,
+                    row_number() OVER (PARTITION BY song_id) AS song_id_ranked
+                FROM staging_songs
+                WHERE song_id IS NOT NULL
+                    AND title IS NOT NULL
+                    AND artist_id IS NOT NULL
+                ) AS ranked
+            WHERE ranked.song_id_ranked = 1
+
         );
     """
 )
@@ -229,27 +252,38 @@ song_table_insert = (
 artist_table_insert = (
     """
         INSERT INTO artists (
-            artist_id VARCHAR PRIMARY KEY,
-            name VARCHAR NOT NULL,
-            location VARCHAR,
-            latitude FLOAT,
-            longitude FLOAT
+            artist_id,
+            name,
+            location,
+            latitude,
+            longitude
         )(
             SELECT
                 artist_id,
-                artist_name AS name,
-                artist_location AS location,
-                artist_latitude AS latitude,
-                artist_longitude AS longitude
-            FROM staging_songs
-            WHERE artist_id IS NOT NULL
-                AND artist_name IS NOT NULL
+                name,
+                location,
+                latitude,
+                longitude            
+            FROM (
+                SELECT
+                    artist_id,
+                    artist_name AS name,
+                    artist_location AS location,
+                    artist_latitude AS latitude,
+                    artist_longitude AS longitude,
+                    row_number() OVER (PARTITION BY artist_id) AS artist_id_ranked
+                FROM staging_songs
+                WHERE artist_id IS NOT NULL
+                    AND artist_name IS NOT NULL
+                ) AS ranked
+            WHERE ranked.artist_id_ranked = 1
+
         );
     """)
 
 time_table_insert = (
     """
-        INSERT INTO artists (
+        INSERT INTO timestamps (
             start_time,
             hour,
             day,
@@ -259,13 +293,13 @@ time_table_insert = (
             weekday
         )(
             SELECT
-                timestamp 'epoch' + ts * interval '1 second' AS start_time,
-                EXTRACT(h FROM timestamp 'epoch' + e.ts * interval '1 second') AS hour
-                EXTRACT(d FROM timestamp 'epoch' + e.ts * interval '1 second') AS day,
-                EXTRACT(w FROM timestamp 'epoch' + e.ts * interval '1 second') AS week,
-                EXTRACT(mon FROM timestamp 'epoch' + e.ts * interval '1 second') AS month,
-                EXTRACT(y FROM timestamp 'epoch' + e.ts * interval '1 second') AS year,
-                EXTRACT(dow FROM timestamp 'epoch' + e.ts * interval '1 second') AS weekday
+                TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second' AS start_time,
+                EXTRACT(h FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS hour,
+                EXTRACT(d FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS day,
+                EXTRACT(w FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS week,
+                EXTRACT(mon FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS month,
+                EXTRACT(y FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS year,
+                EXTRACT(dow FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS weekday
             FROM staging_events
             WHERE ts IS NOT NULL
         );        
