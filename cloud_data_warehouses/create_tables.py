@@ -7,6 +7,16 @@ from sql_queries import (
 
 
 def drop_tables(cur, conn):
+    """
+        Drop all tables in cluster
+
+        Aguements:
+            cur: psycopg2 cursor
+            conn: psycopg2 connection
+            filepath: Filepath to song or log file
+            func: Function to be used for processing
+    """
+
     for table in [
         "staging_events",
         "staging_songs",
@@ -24,12 +34,24 @@ def drop_tables(cur, conn):
 
 
 def create_tables(cur, conn):
+    """
+        Create all required table for ETL
+
+        Aguements:
+            cur: psycopg2 cursor
+            conn: psycopg2 connection
+            filepath: Filepath to song or log file
+            func: Function to be used for processing
+    """
     for query in create_table_queries:
         cur.execute(query)
         conn.commit()
 
 
 def main():
+    """
+        Create pyscopg2 objects to run create_table process
+    """
     config = configparser.ConfigParser()
     config.read("dwh.cfg")
 

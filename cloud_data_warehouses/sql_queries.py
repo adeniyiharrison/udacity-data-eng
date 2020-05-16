@@ -58,13 +58,13 @@ staging_songs_table_create = (
 songplay_table_create = (
     """
         CREATE TABLE songplays (
-            songplay_id INTEGER IDENTITY(0,1),
+            songplay_id INTEGER IDENTITY(0,1) PRIMARY KEY,
             start_time TIMESTAMP,
-            user_id INTEGER,
+            user_id INTEGER NOT NULL,
             level VARCHAR,
-            song_id VARCHAR,
-            artist_id VARCHAR,
-            session_id INTEGER,
+            song_id VARCHAR NOT NULL,
+            artist_id VARCHAR NOT NULL,
+            session_id INTEGER NOT NULL,
             location VARCHAR,
             user_agent VARCHAR
         );
@@ -162,7 +162,7 @@ songplay_table_insert = (
             location,
             user_agent
         )(
-            SELECT
+            SELECT DISTINCT
                 TIMESTAMP 'epoch' + e.ts::INT8/1000 * INTERVAL '1 second' AS start_time,
                 e.userID AS user_id,
                 e.level,
@@ -176,7 +176,12 @@ songplay_table_insert = (
                 ON e.song = s.title
                 AND e.artist = s.artist_name
             WHERE e.ts IS NOT NULL
+                AND e.userID IS NOT NULL
                 AND e.song IS NOT NULL
+                AND e.sessionID IS NOT NULL
+                AND s.song_id IS NOT NULL
+                AND s.artist_id IS NOT NULL
+                AND e.page='NextSong'
         );
     """)
 
@@ -189,7 +194,7 @@ user_table_insert = (
             gender,
             level
         )(
-            SELECT
+            SELECT DISTINCT
                 user_id,
                 first_name,
                 last_name,
@@ -208,6 +213,7 @@ user_table_insert = (
                     AND firstName IS NOT NULL
                     AND lastName IS NOT NULL
                     AND level IS NOT NULL
+                    AND page='NextSong'
                 ) AS ranked
             WHERE ranked.user_id_ranked = 1
 
@@ -224,7 +230,7 @@ song_table_insert = (
             year,
             duration
         )(
-            SELECT
+            SELECT DISTINCT
                 song_id,
                 title,
                 artist_id,
@@ -258,7 +264,7 @@ artist_table_insert = (
             latitude,
             longitude
         )(
-            SELECT
+            SELECT DISTINCT
                 artist_id,
                 name,
                 location,
@@ -292,7 +298,7 @@ time_table_insert = (
             year,
             weekday
         )(
-            SELECT
+            SELECT DISTINCT
                 TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second' AS start_time,
                 EXTRACT(h FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS hour,
                 EXTRACT(d FROM TIMESTAMP 'epoch' + ts::INT8/1000 * INTERVAL '1 second') AS day,
