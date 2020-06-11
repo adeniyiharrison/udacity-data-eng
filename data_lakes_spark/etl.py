@@ -5,9 +5,12 @@ import logging
 from functools import reduce
 from datetime import datetime
 from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import udf, col
+from pyspark.sql.types import (
+    StringType,
+    TimestampType
+)
 from pyspark.sql.functions import (
-    year, month, dayofmonth, hour, weekofyear, date_format
+    udf, monotonically_increasing_id
 )
 
 logging.basicConfig(
@@ -28,7 +31,7 @@ class RunETL():
         self.local = local
         self.sql_folder = "sql/"
         self.bucket_name = "adeniyi-data-lake-project"
-        self.input_data = "s3://adeniyi-data-lake-project/input-data/"
+        self.input_data = "s3a://adeniyi-data-lake-project/input-data/"
         self.output_data = "s3a://adeniyi-data-lake-project/output-data/"
         if local:
             self.download_s3()
@@ -37,13 +40,12 @@ class RunETL():
     def run(
         self
     ):
+        logging.info("etl.py starting..")
 
         self.process_song_data()
         self.process_log_data()
 
-        breakpoint()
-
-        logging.info("done")
+        logging.info("etl.py completed..")
 
     def create_local_spark_session(
         self
@@ -99,6 +101,7 @@ class RunETL():
     def process_song_data(
         self
     ):
+        logging.info("process_song_data starting..")
 
         if self.local:
             # Running locally with test files
@@ -129,80 +132,147 @@ class RunETL():
             df = reduce(DataFrame.unionAll, dfAppend)
 
             # extract columns to create songs table
-            df.createOrReplaceTempView("log_data")
+            df.createOrReplaceTempView("songs_data")
             songs_table = self.read_sql(
-                table_name="log_data",
+                table_name="songs_data",
                 sql_file="create_songs_table.sql",
             )
 
             # write songs table to parquet files partitioned by year and artist
             logging.info("writing songs results")
-            songs_table.write.partitionBy(
+            songs_table.write.mode("overwrite").partitionBy(
                 "year", "artist_id"
             ).parquet(
                 self.output_data +
                 "songs.parquet_" +
-                datetime.now().strftime("%Y-%m-%d-%H-%M")
+                datetime.now().strftime("%Y-%m-%d")
             )
 
-            # # extract columns to create artists table
+            # extract columns to create artists table
             artists_table = self.read_sql(
-                table_name="log_data",
+                table_name="songs_data",
                 sql_file="create_artists_table.sql",
             )
 
             # write artists table to parquet files
             logging.info("writing artist results")
-            artists_table.write.parquet(
+            artists_table.write.mode("overwrite").parquet(
                 self.output_data +
                 "artists.parquet_" +
-                datetime.now().strftime("%Y-%m-%d-%H-%M")
+                datetime.now().strftime("%Y-%m-%d")
             )
         else:
-            # READ FROM INPUT SOURCE DIRECTLY FROM EMR CLUSTER
-            df = self.spark.read.json(self.input_data + "/log-data")
+            pass
+            # # READ DIRECTLY FROM S3
+            # df = self.spark.read.json(self.input_data + "/log-data")
+
+        logging.info("process_song_data completed..")
 
     def process_log_data(
         self
     ):
-        pass
-        # # get filepath to log data file
-        # log_data =
 
-        # # read log data file
-        # df = 
-        
-        # # filter by actions for song plays
-        # df = 
+        logging.info("process_log_data starting..")
 
-        # # extract columns for users table    
-        # artists_table = 
-        
-        # # write users table to parquet files
-        # artists_table
+        @udf(TimestampType())
+        def create_proper_ts(ts):
+            return datetime.fromtimestamp(ts / 1000)
 
-        # # create timestamp column from original timestamp column
-        # get_timestamp = udf()
-        # df = 
-        
-        # # create datetime column from original timestamp column
-        # get_datetime = udf()
-        # df = 
-        
-        # # extract columns to create time table
-        # time_table = 
-        
-        # # write time table to parquet files partitioned by year and month
-        # time_table
+        @udf(StringType())
+        def create_start_time(ts):
+            return ts.strftime('%Y-%m-%d %H:%M:%S')
 
-        # # read in song data to use for songplays table
-        # song_df = 
+        if self.local:
+            df = self.spark.read.json("data/input-data/log-data/*.json")
+            df = df.withColumn("ts", create_proper_ts("ts"))
+            df = df.withColumn("startTime", create_start_time("ts"))
 
-        # # extract columns from joined song and log datasets to create songplays table 
-        # songplays_table = 
+            # extract columns for users table
+            df.createOrReplaceTempView("log_data")
+            users_table = self.read_sql(
+                table_name="log_data",
+                sql_file="create_users_table.sql",
+            )
 
-        # # write songplays table to parquet files partitioned by year and month
-        # songplays_table
+            # write users table to parquet files
+            users_table.write.mode("overwrite").parquet(
+                self.output_data +
+                "users.parquet_" +
+                datetime.now().strftime("%Y-%m-%d")
+            )
+
+            # create timestamp column from original timestamp column
+            df = df.filter(df.page == "NextSong")
+
+            # extract columns to create time table
+            df.createOrReplaceTempView("next_songs")
+            times_table = self.read_sql(
+                    table_name="next_songs",
+                    sql_file="create_times_table.sql"
+            )
+
+            # write time table to parquet files partitioned by year and month
+            times_table.write.mode("overwrite").parquet(
+                self.output_data +
+                "times.parquet_" +
+                datetime.now().strftime("%Y-%m-%d")
+            )
+
+            # extract columns from joined song and log datasets
+            # to create songplays table
+
+            # ON ns.artist = s.artist_name
+            songplays_table = self.spark.sql(
+                """
+                    SELECT
+                        ns.startTime AS start_time,
+                        year(ns.ts) AS year,
+                        month(ns.ts) AS month,
+                        ns.userId AS user_id,
+                        ns.level,
+                        s.song_id,
+                        s.artist_id,
+                        ns.sessionId AS session_id,
+                        ns.location,
+                        userAgent AS user_agent
+                    FROM next_songs ns
+                    LEFT JOIN songs_data s
+                        ON ns.song = s.title
+                    WHERE s.artist_id IS NOT NULL
+                        AND s.title IS NOT NULL
+                """
+            )
+
+            songplays_table = (
+                songplays_table.withColumn(
+                    "songplay_id",
+                    monotonically_increasing_id()
+                )
+            )
+
+            # write songplays table to parquet files
+            songplays_table.select(
+                [
+                    "songplay_id",
+                    "start_time",
+                    "user_id",
+                    "level",
+                    "song_id",
+                    "artist_id",
+                    "session_id",
+                    "location",
+                    "user_agent"
+                ]
+            ).write.mode("overwrite").parquet(
+                self.output_data +
+                "songplays.parquet_" +
+                datetime.now().strftime("%Y-%m-%d")
+            )
+        else:
+            pass
+            # for EMR cluster
+
+        logging.info("process_log_data completed..")
 
 
 if __name__ == "__main__":

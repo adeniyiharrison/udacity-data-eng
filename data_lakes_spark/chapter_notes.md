@@ -289,5 +289,8 @@ spark.sparkContext
 spark.sparkContext.getConf().getAll()
 # print information about spark object such as it being local and the app name if set
 
+# To change to Java 8 because everything above is not compatible
+* https://stackoverflow.com/questions/21964709/how-to-set-or-change-the-default-java-jdk-version-on-os-x
+
 
 ```
