@@ -292,5 +292,17 @@ spark.sparkContext.getConf().getAll()
 # To change to Java 8 because everything above is not compatible
 * https://stackoverflow.com/questions/21964709/how-to-set-or-change-the-default-java-jdk-version-on-os-x
 
+# schema = StructType([StructField("num_songs", IntegerType(), True), StructField("artist_id", StringType(), True), StructField("artist_latitude", StringType(), True), StructField("artist_longitude", StringType(), True), StructField("artist_location", StringType(), True), StructField("artist_name", StringType(), True), StructField("song_id", StringType(), True), StructField("title", StringType(), True), StructField("duration", IntegerType(), True), StructField("year", IntegerType(), True)])
+# schema wasnt needed
+# log_data = spark.read.json("s3a://adeniyi-data-lake-project/input-data/log-data/*.json", schema)
+# song_data = spark.read.json("s3n://adeniyi-data-lake-project/input-data/song-data/song_data/*/*/*/*.json")
+
+* copy from local to emr cluster
+* scp -i ~/.ssh/spark-cluster.pem etl.py hadoop@ec2-54-219-172-221.us-west-1.compute.amazonaws.com:~/
+    * Just the etl.py file
+* scp -i ~/.ssh/spark-cluster.pem -r sql/ hadoop@ec2-54-219-172-221.us-west-1.compute.amazonaws.com:~/
+    * copy folder
+
+
 
 ```
