@@ -1,3 +1,8 @@
+# # Un-comment If running locally
+# import glob
+# import boto3
+# from functools import reduce
+
 import os
 import logging
 from datetime import datetime
@@ -9,11 +14,6 @@ from pyspark.sql.types import (
 from pyspark.sql.functions import (
     udf, monotonically_increasing_id
 )
-
-# # If running locally
-# import glob
-# import boto3
-# from functools import reduce
 
 logging.basicConfig(
     level=logging.INFO,
@@ -116,6 +116,15 @@ class RunETL():
     def process_song_data(
         self
     ):
+
+        """
+
+        Extract song data from S3 and process json files
+        to create songs and artists tables which are saved
+        as parquet tables
+
+        """
+
         logging.info("process_song_data starting..")
 
         if self.local:
@@ -188,6 +197,14 @@ class RunETL():
         self
     ):
 
+        """
+
+        Extract log data from S3 and process json files
+        to create users, times and songplays tables which are saved
+        as parquet tables
+
+        """
+
         logging.info("process_log_data starting..")
 
         @udf(TimestampType())
@@ -214,6 +231,7 @@ class RunETL():
         )
 
         # write users table to parquet files
+        logging.info("writing users results")
         users_table.write.mode("overwrite").parquet(
             self.output_data +
             "users.parquet_" +
@@ -231,6 +249,7 @@ class RunETL():
         )
 
         # write time table to parquet files partitioned by year and month
+        logging.info("writing time results")
         times_table.write.mode("overwrite").parquet(
             self.output_data +
             "times.parquet_" +
@@ -239,27 +258,9 @@ class RunETL():
 
         # extract columns from joined song and log datasets
         # to create songplays table
-
-        # ON ns.artist = s.artist_name
-        songplays_table = self.spark.sql(
-            """
-                SELECT
-                    ns.startTime AS start_time,
-                    year(ns.ts) AS year,
-                    month(ns.ts) AS month,
-                    ns.userId AS user_id,
-                    ns.level,
-                    s.song_id,
-                    s.artist_id,
-                    ns.sessionId AS session_id,
-                    ns.location,
-                    userAgent AS user_agent
-                FROM next_songs ns
-                LEFT JOIN songs_data s
-                    ON ns.song = s.title
-                WHERE s.artist_id IS NOT NULL
-                    AND s.title IS NOT NULL
-            """
+        songplays_table = self.read_sql(
+            table_name=None,
+            sql_file="create_songplays_table.sql",
         )
 
         songplays_table = (
@@ -270,23 +271,15 @@ class RunETL():
         )
 
         # write songplays table to parquet files
-        songplays_table.select(
-            [
-                "songplay_id",
-                "start_time",
-                "user_id",
-                "level",
-                "song_id",
-                "artist_id",
-                "session_id",
-                "location",
-                "user_agent"
-            ]
-        ).write.mode("overwrite").parquet(
-            self.output_data +
-            "songplays.parquet_" +
-            datetime.now().strftime("%Y-%m-%d")
-        )
+        logging.info("writing songplay results")
+        songplays_table\
+            .write.mode("overwrite")\
+            .partitionBy("year", "month")\
+            .parquet(
+                self.output_data +
+                "songplays.parquet_" +
+                datetime.now().strftime("%Y-%m-%d")
+            )
 
         logging.info("process_log_data completed..")
 

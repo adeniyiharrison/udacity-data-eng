@@ -47,5 +47,25 @@ And below is an example of what the data in a log file, 2018-11-12-events.json, 
 
 ![log-data](img/log-data.png)
 
+### Schema After Processing
+
+![star_schema](img/sparkify_star_schema.png)
+
 ### Running Job/Script
+**If running script locally:**
 1. Set `UDACITY_KEY` and `UDACITY_SECRET` variables in environment
+2. Un-comment the imports for the following libraries (glob, boto3, functools)
+
+**Running remotely on Spark Cluster:**
+1. Create cluster via EMR
+    * Ensure spark is on machines
+2. Setup an SSH Tunnel to the Master Node using Dynamic Port Forwarding
+    * https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-ssh-tunnel.html
+3. Configure Proxy Settings to View Websites Hosted on the Master Node
+    * see settings in `foxyproxy-settings.xml`)
+    * https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-connect-master-node-proxy.html
+4. SSH to cluster
+5. SCP `etl.py` and `sql/` to cluster
+    * https://stackoverflow.com/questions/11388014/using-scp-to-copy-a-file-to-amazon-ec2-instance
+6. Run script with `/usr/bin/spark-submit --master yarn etl.py`
+    * `which spark-submit` to find

@@ -1,4 +1,4 @@
-SELECT
+SELECT DISTINCT
     artist_id,
     artist_name AS name,
     artist_location AS location,

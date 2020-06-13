@@ -292,6 +292,13 @@ spark.sparkContext.getConf().getAll()
 # To change to Java 8 because everything above is not compatible
 * https://stackoverflow.com/questions/21964709/how-to-set-or-change-the-default-java-jdk-version-on-os-x
 
+# to impprt spark
+# Add to ~/.bashrc
+* https://stackoverflow.com/questions/31976353/amazon-emr-pyspark-module-not-found
+export SPARK_HOME=/usr/lib/spark
+export PYTHONPATH=$SPARK_HOME/python/lib/py4j-0.10.7-src.zip:$PYTHONPATH
+export PYTHONPATH=$SPARK_HOME/python:$SPARK_HOME/python/build:$PYTHONPATH
+
 # schema = StructType([StructField("num_songs", IntegerType(), True), StructField("artist_id", StringType(), True), StructField("artist_latitude", StringType(), True), StructField("artist_longitude", StringType(), True), StructField("artist_location", StringType(), True), StructField("artist_name", StringType(), True), StructField("song_id", StringType(), True), StructField("title", StringType(), True), StructField("duration", IntegerType(), True), StructField("year", IntegerType(), True)])
 # schema wasnt needed
 # log_data = spark.read.json("s3a://adeniyi-data-lake-project/input-data/log-data/*.json", schema)
