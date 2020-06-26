@@ -16,20 +16,20 @@ You'll be provided with a helpers class that contains all the SQL transformation
 
 ![Example_DAG](img/example-dag.png)
 
-## Structure
+## File/Directory Structure
 
-* `udac_example_dag.py` contains the tasks and dependencies of the DAG. It should be placed in the `dags` directory of your Airflow installation.
-* `create_tables.sql` contains the SQL queries used to create all the required tables in Redshift. It should be placed in the `dags` directory of your Airflow installation.
-* `sql_queries.py` contains the SQL queries used in the ETL process. It should be placed in the `plugins/helpers` directory of your Airflow installation.
+__DAG and Query Definition__
+* `udac_example_dag.py` is where the DAG is created and the tasks are definted/linked together
+* `create_tables.sql` creates the tables in the Redshift DB
+* `sql_queries.py` are the queries used to migrate data from staging tables to fact/dimension tables
 
-The following operators should be placed in the `plugins/operators` directory of
-your Airflow installation:
-* `stage_redshift.py` contains `StageToRedshiftOperator`, which copies JSON data from S3 to staging tables in the Redshift data warehouse.
-* `load_dimension.py` contains `LoadDimensionOperator`, which loads a dimension table from data in the staging table(s).
-* `load_fact.py` contains `LoadFactOperator`, which loads a fact table from data in the staging table(s).
-* `data_quality.py` contains `DataQualityOperator`, which runs a data quality check by passing an SQL query and expected result as arguments, failing if the results don't match.
+__Operator Definition__
+* `stage_redshift.py` defines `StageToRedshiftOperator`, copies data from s3 to Redshift DB
+* `load_dimension.py` defines `LoadDimensionOperator`, loads data to dim table from stage.
+* `load_fact.py` defines `LoadFactOperator`, loads data to fact table from stage.
+* `data_quality.py` defines `DataQualityOperator`, checks whether data in Redshift is as expected
 
-## To Run
+## How to Run
 * Download Airlow Image // run container
     * http://localhost:8080/admin/
     * https://towardsdatascience.com/getting-started-with-airflow-using-docker-cd8b44dbff98
