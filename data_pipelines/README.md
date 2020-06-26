@@ -15,3 +15,26 @@ We have provided you with a project template that takes care of all the imports 
 You'll be provided with a helpers class that contains all the SQL transformations. Thus, you won't need to write the ETL yourselves, but you'll need to execute it with your custom operators.
 
 ![Example_DAG](img/example-dag.png)
+
+## Structure
+
+* `udac_example_dag.py` contains the tasks and dependencies of the DAG. It should be placed in the `dags` directory of your Airflow installation.
+* `create_tables.sql` contains the SQL queries used to create all the required tables in Redshift. It should be placed in the `dags` directory of your Airflow installation.
+* `sql_queries.py` contains the SQL queries used in the ETL process. It should be placed in the `plugins/helpers` directory of your Airflow installation.
+
+The following operators should be placed in the `plugins/operators` directory of
+your Airflow installation:
+* `stage_redshift.py` contains `StageToRedshiftOperator`, which copies JSON data from S3 to staging tables in the Redshift data warehouse.
+* `load_dimension.py` contains `LoadDimensionOperator`, which loads a dimension table from data in the staging table(s).
+* `load_fact.py` contains `LoadFactOperator`, which loads a fact table from data in the staging table(s).
+* `data_quality.py` contains `DataQualityOperator`, which runs a data quality check by passing an SQL query and expected result as arguments, failing if the results don't match.
+
+## To Run
+* Download Airlow Image // run container
+    * http://localhost:8080/admin/
+    * https://towardsdatascience.com/getting-started-with-airflow-using-docker-cd8b44dbff98
+* Create Redshift Cluster
+    * Setup VPC security group to allow inbound access to port 5439
+* Setup Airflow connections
+    * AWS credentials
+    * Connection to Postgres database

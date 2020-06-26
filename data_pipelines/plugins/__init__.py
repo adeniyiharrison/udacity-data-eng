@@ -5,10 +5,9 @@ from airflow.plugins_manager import AirflowPlugin
 import operators
 import helpers
 
-
 # Defining the plugin class
 class UdacityPlugin(AirflowPlugin):
-    name = "airflow_project_plugin"
+    name = "udacity_plugin"
     operators = [
         operators.StageToRedshiftOperator,
         operators.LoadFactOperator,

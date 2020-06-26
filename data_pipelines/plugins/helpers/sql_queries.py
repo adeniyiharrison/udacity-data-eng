@@ -61,12 +61,3 @@ class SqlQueries:
             extract(dayofweek from start_time)
         FROM songplays
     """)
-
-    create_table_from_s3 = """
-        COPY {table_name}
-        FROM '{s3_location}'
-        ACCESS_KEY_ID '{key}'
-        SECRET_ACCESS_KEY '{secret}'
-        IGNOREHEADER 1
-        DELIMITER ','
-    """
