@@ -1,5 +1,6 @@
 import boto3
 import logging
+# import urllib2
 from io import StringIO
 import spotipy
 from spotipy import oauth2
@@ -44,24 +45,30 @@ def return_s3_client():
 
 def dataframe_to_s3(
     s3_client,
-    dataframe
+    dataframe,
+    year
 ):
 
     csv_buffer = StringIO()
-    dataframe.to_csv(csv_buffer)
+    dataframe.to_csv(
+        csv_buffer,
+        index=False
+    )
 
     s3_client.put_object(
         Body=csv_buffer.getvalue(),
         Bucket="adeniyi-capstone-project",
-        Key="spotify_data/tracks_data_{datetime}.csv".format(
-            datetime=datetime.now().strftime("%Y%m%d%H%M")
+        Key="spotify_data/tracks_data_{datetime}_{year}.csv".format(
+            datetime=datetime.now().strftime("%Y%m%d%H%M%S"),
+            year=year
         )
     )
 
 
 def process_tracks(
     s3_client,
-    query_results
+    query_results,
+    year
 ):
     track_results = []
 
@@ -96,30 +103,35 @@ def process_tracks(
         track_results.append(track_dict)
 
     track_results = DataFrame(track_results)
-    dataframe_to_s3(s3_client, track_results)
+    dataframe_to_s3(s3_client, track_results, year)
 
 
 def query_tracks(
-    products_to_return=100,
-    year="2020"
+    **kwargs
 ):
+
+    year = kwargs["year"]
 
     spc = return_spotipy_client()
     s3 = return_s3_client()
 
-    for i in range(0, products_to_return, 50):
-        query_results = spc.search(
-            q=f"year:{year}",
-            type="track",
-            limit=50,
-            offset=i
-        )
-
-        logging.info(f"query results returned for index #{i}")
-        process_tracks(
-            s3_client=s3,
-            query_results=query_results
-        )
+    for i in range(0, 2000, 50):
+        try:
+            query_results = spc.search(
+                q=f"year:{year}",
+                type="track",
+                limit=50,
+                offset=i
+            )
+            logging.info(f"query results returned for index #{i}")
+            process_tracks(
+                s3_client=s3,
+                query_results=query_results,
+                year=year
+            )
+        except Exception as e:
+            logging.info(e)
+            continue
 
 
 default_args = {
@@ -143,10 +155,93 @@ start_operator = DummyOperator(
     dag=dag
 )
 
-copy_trips_task = PythonOperator(
-    task_id="tracks_to_s3",
+copy_trips_task_2010 = PythonOperator(
+    task_id="tracks_to_s3_2010",
     dag=dag,
-    python_callable=query_tracks
+    python_callable=query_tracks,
+    op_kwargs={"year": "2010"}
 )
 
-start_operator >> copy_trips_task
+copy_trips_task_2011 = PythonOperator(
+    task_id="tracks_to_s3_2011",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2011"}
+)
+
+copy_trips_task_2012 = PythonOperator(
+    task_id="tracks_to_s3_2012",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2012"}
+)
+
+copy_trips_task_2013 = PythonOperator(
+    task_id="tracks_to_s3_2013",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2013"}
+)
+
+copy_trips_task_2014 = PythonOperator(
+    task_id="tracks_to_s3_2014",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2014"}
+)
+
+copy_trips_task_2015 = PythonOperator(
+    task_id="tracks_to_s3_2015",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2015"}
+)
+
+copy_trips_task_2016 = PythonOperator(
+    task_id="tracks_to_s3_2016",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2016"}
+)
+
+copy_trips_task_2017 = PythonOperator(
+    task_id="tracks_to_s3_2017",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2017"}
+)
+
+copy_trips_task_2018 = PythonOperator(
+    task_id="tracks_to_s3_2018",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2018"}
+)
+
+copy_trips_task_2019 = PythonOperator(
+    task_id="tracks_to_s3_2019",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2019"}
+)
+
+copy_trips_task_2020 = PythonOperator(
+    task_id="tracks_to_s3_2020",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2020"}
+)
+
+start_operator >> [
+    copy_trips_task_2010,
+    copy_trips_task_2011,
+    copy_trips_task_2012,
+    copy_trips_task_2013,
+    copy_trips_task_2014,
+    copy_trips_task_2015,
+    copy_trips_task_2016,
+    copy_trips_task_2017,
+    copy_trips_task_2018,
+    copy_trips_task_2019,
+    copy_trips_task_2020
+    ]
