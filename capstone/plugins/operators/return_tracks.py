@@ -1,5 +1,8 @@
 import logging
+import spotipy
+from spotipy import oauth2
 from pandas import DataFrame
+from airflow.models import Variable
 from airflow.models import BaseOperator
 from airflow.utils.decorators import apply_defaults
 
@@ -7,6 +10,8 @@ from airflow.utils.decorators import apply_defaults
 class ReturnTracksOperator(
     BaseOperator
 ):
+
+    ui_color = "#89DA59"
 
     logging.basicConfig(
         level=logging.INFO,
@@ -16,7 +21,6 @@ class ReturnTracksOperator(
     @apply_defaults
     def __init__(
         self,
-        spotipy_client,
         products_to_return=100,
         year="2020",
         *args,
@@ -24,9 +28,23 @@ class ReturnTracksOperator(
     ):
 
         super(ReturnTracksOperator, self).__init__(*args, **kwargs)
-        self.spotipy_client = spotipy_client
+        self.spotipy_client = self.return_spotipy_client()
         self.products_to_return = products_to_return
         self.year = year
+
+    def return_spotipy_client(
+        self
+    ):
+        ccm = oauth2.SpotifyClientCredentials(
+            client_id=Variable.get("spotify_client_id"),
+            client_secret=Variable.get("spotify_client_secret")
+        )
+
+        spc = spotipy.Spotify(
+            client_credentials_manager=ccm
+        )
+
+        return spc
 
     def process_tracks(
         self,
