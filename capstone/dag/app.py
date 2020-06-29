@@ -53,7 +53,8 @@ def dataframe_to_s3(
     csv_buffer = StringIO()
     dataframe.to_csv(
         csv_buffer,
-        index=False
+        index=False,
+        header=False
     )
 
     s3_client.put_object(
@@ -186,82 +187,82 @@ start_operator = DummyOperator(
     dag=dag
 )
 
-# copy_trips_task_2010 = PythonOperator(
-#     task_id="tracks_to_s3_2010",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2010"}
-# )
+copy_trips_task_2010 = PythonOperator(
+    task_id="tracks_to_s3_2010",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2010"}
+)
 
-# copy_trips_task_2011 = PythonOperator(
-#     task_id="tracks_to_s3_2011",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2011"}
-# )
+copy_trips_task_2011 = PythonOperator(
+    task_id="tracks_to_s3_2011",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2011"}
+)
 
-# copy_trips_task_2012 = PythonOperator(
-#     task_id="tracks_to_s3_2012",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2012"}
-# )
+copy_trips_task_2012 = PythonOperator(
+    task_id="tracks_to_s3_2012",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2012"}
+)
 
-# copy_trips_task_2013 = PythonOperator(
-#     task_id="tracks_to_s3_2013",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2013"}
-# )
+copy_trips_task_2013 = PythonOperator(
+    task_id="tracks_to_s3_2013",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2013"}
+)
 
-# copy_trips_task_2014 = PythonOperator(
-#     task_id="tracks_to_s3_2014",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2014"}
-# )
+copy_trips_task_2014 = PythonOperator(
+    task_id="tracks_to_s3_2014",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2014"}
+)
 
-# copy_trips_task_2015 = PythonOperator(
-#     task_id="tracks_to_s3_2015",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2015"}
-# )
+copy_trips_task_2015 = PythonOperator(
+    task_id="tracks_to_s3_2015",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2015"}
+)
 
-# copy_trips_task_2016 = PythonOperator(
-#     task_id="tracks_to_s3_2016",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2016"}
-# )
+copy_trips_task_2016 = PythonOperator(
+    task_id="tracks_to_s3_2016",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2016"}
+)
 
-# copy_trips_task_2017 = PythonOperator(
-#     task_id="tracks_to_s3_2017",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2017"}
-# )
+copy_trips_task_2017 = PythonOperator(
+    task_id="tracks_to_s3_2017",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2017"}
+)
 
-# copy_trips_task_2018 = PythonOperator(
-#     task_id="tracks_to_s3_2018",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2018"}
-# )
+copy_trips_task_2018 = PythonOperator(
+    task_id="tracks_to_s3_2018",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2018"}
+)
 
-# copy_trips_task_2019 = PythonOperator(
-#     task_id="tracks_to_s3_2019",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2019"}
-# )
+copy_trips_task_2019 = PythonOperator(
+    task_id="tracks_to_s3_2019",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2019"}
+)
 
-# copy_trips_task_2020 = PythonOperator(
-#     task_id="tracks_to_s3_2020",
-#     dag=dag,
-#     python_callable=query_tracks,
-#     op_kwargs={"year": "2020"}
-# )
+copy_trips_task_2020 = PythonOperator(
+    task_id="tracks_to_s3_2020",
+    dag=dag,
+    python_callable=query_tracks,
+    op_kwargs={"year": "2020"}
+)
 
 create_tables = PostgresOperator(
     task_id="create_tables",
@@ -282,18 +283,30 @@ stage_redshift = PythonOperator(
     }
 )
 
-start_operator >> create_tables >> stage_redshift
-
-# start_operator >> [
-#     copy_trips_task_2010,
-#     copy_trips_task_2011,
-#     copy_trips_task_2012,
-#     copy_trips_task_2013,
-#     copy_trips_task_2014,
-#     copy_trips_task_2015,
-#     copy_trips_task_2016,
-#     copy_trips_task_2017,
-#     copy_trips_task_2018,
-#     copy_trips_task_2019,
-#     copy_trips_task_2020
-#     ]
+start_operator >> [
+    copy_trips_task_2010,
+    copy_trips_task_2011,
+    copy_trips_task_2012,
+    copy_trips_task_2013,
+    copy_trips_task_2014,
+    copy_trips_task_2015,
+    copy_trips_task_2016,
+    copy_trips_task_2017,
+    copy_trips_task_2018,
+    copy_trips_task_2019,
+    copy_trips_task_2020
+    ]
+[
+    copy_trips_task_2010,
+    copy_trips_task_2011,
+    copy_trips_task_2012,
+    copy_trips_task_2013,
+    copy_trips_task_2014,
+    copy_trips_task_2015,
+    copy_trips_task_2016,
+    copy_trips_task_2017,
+    copy_trips_task_2018,
+    copy_trips_task_2019,
+    copy_trips_task_2020
+    ] >> create_tables
+create_tables >> stage_redshift
