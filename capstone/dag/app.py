@@ -1,6 +1,5 @@
 import boto3
 import logging
-# import urllib2
 from io import StringIO
 import spotipy
 from spotipy import oauth2
@@ -9,6 +8,8 @@ from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.models import Variable
+from airflow.operators import PostgresOperator
+from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import PythonOperator
 
@@ -134,6 +135,36 @@ def query_tracks(
             continue
 
 
+def s3_to_redshift(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    table_name = kwargs["table_name"]
+    s3_bucket = kwargs["s3_bucket"]
+    s3_key = kwargs["s3_key"]
+
+    redshift = PostgresHook(connection_id)
+
+    s3_path = "s3://{}/{}".format(s3_bucket, s3_key)
+
+    query = (
+        """
+            COPY {table_name}
+            FROM '{s3_path}'
+            ACCESS_KEY_ID '{key}'
+            SECRET_ACCESS_KEY '{secret}'
+            REGION AS 'us-west-1'
+        """.format(
+            table_name=table_name,
+            s3_path=s3_path,
+            key=Variable.get("aws_key"),
+            secret=Variable.get("aws_secret")
+        )
+    )
+
+    redshift.run(query)
+
+
 default_args = {
     "owner": "adeniyi",
     "start_date": datetime(2020, 6, 28),
@@ -155,93 +186,114 @@ start_operator = DummyOperator(
     dag=dag
 )
 
-copy_trips_task_2010 = PythonOperator(
-    task_id="tracks_to_s3_2010",
+# copy_trips_task_2010 = PythonOperator(
+#     task_id="tracks_to_s3_2010",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2010"}
+# )
+
+# copy_trips_task_2011 = PythonOperator(
+#     task_id="tracks_to_s3_2011",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2011"}
+# )
+
+# copy_trips_task_2012 = PythonOperator(
+#     task_id="tracks_to_s3_2012",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2012"}
+# )
+
+# copy_trips_task_2013 = PythonOperator(
+#     task_id="tracks_to_s3_2013",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2013"}
+# )
+
+# copy_trips_task_2014 = PythonOperator(
+#     task_id="tracks_to_s3_2014",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2014"}
+# )
+
+# copy_trips_task_2015 = PythonOperator(
+#     task_id="tracks_to_s3_2015",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2015"}
+# )
+
+# copy_trips_task_2016 = PythonOperator(
+#     task_id="tracks_to_s3_2016",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2016"}
+# )
+
+# copy_trips_task_2017 = PythonOperator(
+#     task_id="tracks_to_s3_2017",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2017"}
+# )
+
+# copy_trips_task_2018 = PythonOperator(
+#     task_id="tracks_to_s3_2018",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2018"}
+# )
+
+# copy_trips_task_2019 = PythonOperator(
+#     task_id="tracks_to_s3_2019",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2019"}
+# )
+
+# copy_trips_task_2020 = PythonOperator(
+#     task_id="tracks_to_s3_2020",
+#     dag=dag,
+#     python_callable=query_tracks,
+#     op_kwargs={"year": "2020"}
+# )
+
+create_tables = PostgresOperator(
+    task_id="create_tables",
     dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2010"}
+    postgres_conn_id="redshift",
+    sql="create_tables.sql"
 )
 
-copy_trips_task_2011 = PythonOperator(
-    task_id="tracks_to_s3_2011",
+stage_redshift = PythonOperator(
+    task_id="stage_redshift",
     dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2011"}
+    python_callable=s3_to_redshift,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "table_name": "tracks_staging",
+        "s3_bucket": "adeniyi-capstone-project",
+        "s3_key": "spotify_data"
+    }
 )
 
-copy_trips_task_2012 = PythonOperator(
-    task_id="tracks_to_s3_2012",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2012"}
-)
+start_operator >> create_tables >> stage_redshift
 
-copy_trips_task_2013 = PythonOperator(
-    task_id="tracks_to_s3_2013",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2013"}
-)
-
-copy_trips_task_2014 = PythonOperator(
-    task_id="tracks_to_s3_2014",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2014"}
-)
-
-copy_trips_task_2015 = PythonOperator(
-    task_id="tracks_to_s3_2015",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2015"}
-)
-
-copy_trips_task_2016 = PythonOperator(
-    task_id="tracks_to_s3_2016",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2016"}
-)
-
-copy_trips_task_2017 = PythonOperator(
-    task_id="tracks_to_s3_2017",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2017"}
-)
-
-copy_trips_task_2018 = PythonOperator(
-    task_id="tracks_to_s3_2018",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2018"}
-)
-
-copy_trips_task_2019 = PythonOperator(
-    task_id="tracks_to_s3_2019",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2019"}
-)
-
-copy_trips_task_2020 = PythonOperator(
-    task_id="tracks_to_s3_2020",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2020"}
-)
-
-start_operator >> [
-    copy_trips_task_2010,
-    copy_trips_task_2011,
-    copy_trips_task_2012,
-    copy_trips_task_2013,
-    copy_trips_task_2014,
-    copy_trips_task_2015,
-    copy_trips_task_2016,
-    copy_trips_task_2017,
-    copy_trips_task_2018,
-    copy_trips_task_2019,
-    copy_trips_task_2020
-    ]
+# start_operator >> [
+#     copy_trips_task_2010,
+#     copy_trips_task_2011,
+#     copy_trips_task_2012,
+#     copy_trips_task_2013,
+#     copy_trips_task_2014,
+#     copy_trips_task_2015,
+#     copy_trips_task_2016,
+#     copy_trips_task_2017,
+#     copy_trips_task_2018,
+#     copy_trips_task_2019,
+#     copy_trips_task_2020
+#     ]
