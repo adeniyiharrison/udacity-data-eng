@@ -155,6 +155,7 @@ def s3_to_redshift(
             ACCESS_KEY_ID '{key}'
             SECRET_ACCESS_KEY '{secret}'
             REGION AS 'us-west-1'
+            CSV;
         """.format(
             table_name=table_name,
             s3_path=s3_path,
@@ -282,6 +283,8 @@ stage_redshift = PythonOperator(
         "s3_key": "spotify_data"
     }
 )
+
+start_operator >> stage_redshift
 
 start_operator >> [
     copy_trips_task_2010,
