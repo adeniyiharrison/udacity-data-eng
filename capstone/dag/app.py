@@ -118,14 +118,15 @@ def enrich_streams_data(
         f"""
             SELECT
                 track_name,
-                artist AS artist_name
+                artist AS artist_name,
+                url AS track_url
             FROM streams_staging
             WHERE date = '{date_str}'
         """
     )
 
     track_results = []
-    for track_name, artist_name in daily_streams:
+    for track_name, artist_name, track_url in daily_streams:
         song_metadata = spc.search(
             q=f"artist:{artist_name} track:{track_name}",
             type="track",
@@ -135,8 +136,10 @@ def enrich_streams_data(
         track_dict = {}
         try:
             song_metadata = song_metadata["tracks"]["items"][0]
+            track_dict["track_name"] = track_name
+            track_dict["artist_name"] = artist_name
+            track_dict["track_url"] = track_url
             track_dict["album_name"] = song_metadata["album"]["name"]
-            track_dict["song_uri"] = song_metadata["uri"]
             track_dict["album_type"] = song_metadata["album"]["album_type"]
             track_dict["album_release_date"] = (
                 song_metadata["album"]["release_date"]
@@ -151,7 +154,7 @@ def enrich_streams_data(
             logging.info(e)
             pass
 
-    track_results = DataFrame(track_results)
+    track_results = DataFrame(track_results).drop_duplicates()
     dataframe_to_s3(
         s3_client=s3,
         dataframe=track_results,
@@ -182,11 +185,12 @@ def s3_to_redshift(
             ACCESS_KEY_ID '{key}'
             SECRET_ACCESS_KEY '{secret}'
             REGION AS 'us-west-1'
+            DELIMITER ','
             CSV;
 
             DELETE FROM {table_name}
             USING {table_name}_temp
-            WHERE {table_name}.song_uri = {table_name}_temp.song_uri;
+            WHERE {table_name}.track_url = {table_name}_temp.track_url;
 
             INSERT INTO {table_name}
             SELECT *
@@ -198,6 +202,7 @@ def s3_to_redshift(
 default_args = {
     "owner": "adeniyi",
     "start_date": datetime(2017, 1, 1),
+    "end_date": datetime(2017, 1, 2),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
