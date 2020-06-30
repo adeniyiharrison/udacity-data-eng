@@ -34,7 +34,7 @@ class StageToRedshiftOperator(BaseOperator):
             ACCESS_KEY_ID '{key}'
             SECRET_ACCESS_KEY '{secret}'
             REGION AS '{region}'
-            FORMAT as json '{json_copy}'
+            CSV;
         """)
         self.aws_hook = AwsHook(aws_conn_id)
         self.aws_credentials = self.aws_hook.get_credentials()
@@ -55,7 +55,7 @@ class StageToRedshiftOperator(BaseOperator):
         )
 
         rendered_key = self.s3_key.format(**context)
-        s3_path = "s3://{}/{}".format(self.s3_bucket, rendered_key)        
+        s3_path = "s3://{}/{}".format(self.s3_bucket, rendered_key)
 
         self.redshift.run(
             self.query.format(
