@@ -111,6 +111,9 @@ def process_tracks(
 def query_tracks(
     **kwargs
 ):
+    """
+        Hit Spotify API
+    """
 
     year = kwargs["execution_date"].strftime("%Y")
 
@@ -172,20 +175,58 @@ def s3_to_redshift(
     )
 
 
+def stage_streams(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    key = Variable.get("aws_key")
+    secret = Variable.get("aws_secret")
+
+    table_name = kwargs["table_name"]
+    s3_bucket = kwargs["s3_bucket"]
+    s3_key = kwargs["s3_key"]
+    s3_path = "s3://{}/{}".format(s3_bucket, s3_key)
+
+    total_records = redshift.get_records(
+        f"""
+            SELECT
+                COUNT(1) AS total_records
+            FROM {table_name}
+
+        """
+    )
+    total_records = total_records[0][0]
+
+    if total_records == 0:
+        redshift.run(
+            f"""
+                COPY {table_name}
+                FROM '{s3_path}'
+                ACCESS_KEY_ID '{key}'
+                SECRET_ACCESS_KEY '{secret}'
+                REGION AS 'us-west-1'
+                IGNOREHEADER 1
+                CSV;
+            """
+        )
+
+
 default_args = {
     "owner": "adeniyi",
     "start_date": datetime(1960, 1, 1),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
-    "catchup": False
+    "catchup": True
 }
 
 dag = DAG(
     "capstone_project",
     default_args=default_args,
     description="Load and transform data in Redshift with Airflow",
-    schedule_interval="@yearly"
+    # schedule_interval="@yearly"
+    schedule_interval=None
     )
 
 start_operator = DummyOperator(
@@ -207,8 +248,8 @@ create_tables = PostgresOperator(
     sql="create_tables.sql"
 )
 
-stage_redshift = PythonOperator(
-    task_id="stage_redshift",
+stage_tracks_redshift = PythonOperator(
+    task_id="stage_tracks_redshift",
     dag=dag,
     python_callable=s3_to_redshift,
     provide_context=True,
@@ -220,6 +261,20 @@ stage_redshift = PythonOperator(
     }
 )
 
+stage_streams_redshift = PythonOperator(
+    task_id="stage_streams_redshift",
+    dag=dag,
+    python_callable=stage_streams,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "table_name": "streams_staging",
+        "s3_bucket": "adeniyi-capstone-project",
+        "s3_key": "kaggle_data"
+    }
+)
+
 start_operator >> tracks_to_s3
 tracks_to_s3 >> create_tables
-create_tables >> stage_redshift
+create_tables >> stage_tracks_redshift
+create_tables >> stage_streams_redshift

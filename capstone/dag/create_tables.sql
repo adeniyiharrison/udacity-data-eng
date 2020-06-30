@@ -7,3 +7,13 @@ CREATE TABLE IF NOT EXISTS tracks_staging (
     album_name VARCHAR,
     popularity VARCHAR
 ) sortkey("song_uri");
+
+CREATE TABLE IF NOT EXISTS streams_staging (
+    position INTEGER NOT NULL,
+    track_name VARCHAR,
+    artist VARCHAR,
+    streams INTEGER,
+    url VARCHAR,
+    date DATE,
+    region VARCHAR
+);
