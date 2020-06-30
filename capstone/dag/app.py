@@ -44,137 +44,6 @@ def return_s3_client():
     return s3
 
 
-def dataframe_to_s3(
-    s3_client,
-    dataframe,
-    year
-):
-
-    csv_buffer = StringIO()
-    dataframe.to_csv(
-        csv_buffer,
-        index=False,
-        header=False
-    )
-
-    s3_client.put_object(
-        Body=csv_buffer.getvalue(),
-        Bucket="adeniyi-capstone-project",
-        Key="spotify_data/tracks_data_{datetime}_{year}.csv".format(
-            datetime=datetime.now().strftime("%Y%m%d%H%M%S"),
-            year=year
-        )
-    )
-
-
-def process_tracks(
-    s3_client,
-    query_results,
-    year
-):
-    track_results = []
-
-    for track in query_results["tracks"]["items"]:
-        track_dict = {
-            "song_uri": None,
-            "song_name": None,
-            "artist_name": None,
-            "album_type": None,
-            "album_release_date": None,
-            "album_name": None,
-            "popularity": None
-        }
-        try:
-            track_dict["album_type"] = track["album"]["album_type"]
-            track_dict["album_release_date"] = (
-                track["album"]["release_date"]
-            )
-            track_dict["album_name"] = track["album"]["name"]
-            track_dict["song_name"] = track["name"]
-            track_dict["song_uri"] = track["uri"]
-            track_dict["popularity"] = track["popularity"]
-
-            if type(track["artists"]) == list:
-                track_dict["artist_name"] = track["artists"][0]["name"]
-            elif type(track["artists"]) == dict:
-                track_dict["artist_name"] = track["artists"]["name"]
-
-        except Exception as e:
-            logging.info(e)
-
-        track_results.append(track_dict)
-
-    track_results = DataFrame(track_results)
-    dataframe_to_s3(s3_client, track_results, year)
-
-
-def query_tracks(
-    **kwargs
-):
-    """
-        Hit Spotify API
-    """
-
-    year = kwargs["execution_date"].strftime("%Y")
-
-    spc = return_spotipy_client()
-    s3 = return_s3_client()
-
-    for i in range(0, 2000, 50):
-        try:
-            query_results = spc.search(
-                q=f"year:{year}",
-                type="track",
-                limit=50,
-                offset=i
-            )
-            logging.info(f"query results returned for index #{i}")
-            process_tracks(
-                s3_client=s3,
-                query_results=query_results,
-                year=year
-            )
-        except Exception as e:
-            logging.info(e)
-            pass
-
-
-def s3_to_redshift(
-    **kwargs
-):
-    connection_id = kwargs["redshift_conn_id"]
-    redshift = PostgresHook(connection_id)
-    key = Variable.get("aws_key")
-    secret = Variable.get("aws_secret")
-
-    year = kwargs["execution_date"].strftime("%Y")
-    table_name = kwargs["table_name"]
-    s3_bucket = kwargs["s3_bucket"]
-    s3_key = kwargs["s3_key"]
-    s3_path = "s3://{}/{}".format(s3_bucket, s3_key)
-
-    redshift.run(
-        f"""
-        CREATE TEMP TABLE {table_name}_{year}_temp (LIKE {table_name});
-
-        COPY {table_name}_{year}_temp
-        FROM '{s3_path}'
-        ACCESS_KEY_ID '{key}'
-        SECRET_ACCESS_KEY '{secret}'
-        REGION AS 'us-west-1'
-        CSV;
-
-        DELETE FROM {table_name}
-        USING {table_name}_{year}_temp
-        WHERE {table_name}.song_uri = {table_name}_{year}_temp.song_uri;
-
-        INSERT INTO {table_name}
-        SELECT *
-        FROM {table_name}_{year}_temp;
-        """
-    )
-
-
 def stage_streams(
     **kwargs
 ):
@@ -212,9 +81,123 @@ def stage_streams(
         )
 
 
+def dataframe_to_s3(
+    s3_client,
+    dataframe,
+    key
+):
+
+    csv_buffer = StringIO()
+    dataframe.to_csv(
+        csv_buffer,
+        index=False,
+        header=False
+    )
+
+    s3_client.put_object(
+        Body=csv_buffer.getvalue(),
+        Bucket="adeniyi-capstone-project",
+        Key=key
+    )
+
+
+def enrich_streams_data(
+    **kwargs
+):
+    """
+        Hit Spotify API via Spotipy library
+    """
+
+    date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    spc = return_spotipy_client()
+    s3 = return_s3_client()
+
+    daily_streams = redshift.get_records(
+        f"""
+            SELECT
+                track_name,
+                artist AS artist_name
+            FROM streams_staging
+            WHERE date = '{date_str}'
+        """
+    )
+
+    track_results = []
+    for track_name, artist_name in daily_streams:
+        song_metadata = spc.search(
+            q=f"artist:{artist_name} track:{track_name}",
+            type="track",
+            limit=1
+        )
+
+        track_dict = {}
+        try:
+            song_metadata = song_metadata["tracks"]["items"][0]
+            track_dict["album_name"] = song_metadata["album"]["name"]
+            track_dict["song_uri"] = song_metadata["uri"]
+            track_dict["album_type"] = song_metadata["album"]["album_type"]
+            track_dict["album_release_date"] = (
+                song_metadata["album"]["release_date"]
+            )
+            track_dict["popularity"] = song_metadata["popularity"]
+            track_dict["duration"] = song_metadata["duration_ms"]
+            track_dict["explicit"] = song_metadata["explicit"]
+
+            track_results.append(track_dict)
+
+        except Exception as e:
+            logging.info(e)
+            pass
+
+    track_results = DataFrame(track_results)
+    dataframe_to_s3(
+        s3_client=s3,
+        dataframe=track_results,
+        key=f"track_metadata/track_metadata_{date_str}.csv"
+    )
+
+
+def s3_to_redshift(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    key = Variable.get("aws_key")
+    secret = Variable.get("aws_secret")
+
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+    table_name = kwargs["table_name"]
+    s3_bucket = kwargs["s3_bucket"]
+    s3_key = kwargs["s3_key"]
+    s3_path = f"s3://{s3_bucket}/{s3_key}_{date}"
+
+    redshift.run(
+        f"""
+            CREATE TEMP TABLE {table_name}_temp (LIKE {table_name});
+
+            COPY {table_name}_temp
+            FROM '{s3_path}'
+            ACCESS_KEY_ID '{key}'
+            SECRET_ACCESS_KEY '{secret}'
+            REGION AS 'us-west-1'
+            CSV;
+
+            DELETE FROM {table_name}
+            USING {table_name}_temp
+            WHERE {table_name}.song_uri = {table_name}_temp.song_uri;
+
+            INSERT INTO {table_name}
+            SELECT *
+            FROM {table_name}_temp;
+        """
+    )
+
+
 default_args = {
     "owner": "adeniyi",
-    "start_date": datetime(1960, 1, 1),
+    "start_date": datetime(2017, 1, 1),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
@@ -225,8 +208,8 @@ dag = DAG(
     "capstone_project",
     default_args=default_args,
     description="Load and transform data in Redshift with Airflow",
-    # schedule_interval="@yearly"
-    schedule_interval=None
+    schedule_interval="@daily"
+    # schedule_interval=None
     )
 
 start_operator = DummyOperator(
@@ -234,31 +217,11 @@ start_operator = DummyOperator(
     dag=dag
 )
 
-tracks_to_s3 = PythonOperator(
-    task_id="tracks_to_s3",
-    dag=dag,
-    python_callable=query_tracks,
-    provide_context=True
-)
-
 create_tables = PostgresOperator(
     task_id="create_tables",
     dag=dag,
     postgres_conn_id="redshift",
     sql="create_tables.sql"
-)
-
-stage_tracks_redshift = PythonOperator(
-    task_id="stage_tracks_redshift",
-    dag=dag,
-    python_callable=s3_to_redshift,
-    provide_context=True,
-    op_kwargs={
-        "redshift_conn_id": "redshift",
-        "table_name": "tracks_staging",
-        "s3_bucket": "adeniyi-capstone-project",
-        "s3_key": "spotify_data"
-    }
 )
 
 stage_streams_redshift = PythonOperator(
@@ -274,7 +237,31 @@ stage_streams_redshift = PythonOperator(
     }
 )
 
-start_operator >> tracks_to_s3
-tracks_to_s3 >> create_tables
-create_tables >> stage_tracks_redshift
+enrich_streams_data = PythonOperator(
+    task_id="enrich_streams_data",
+    dag=dag,
+    python_callable=enrich_streams_data,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "table_name": "streams_staging"
+    }
+)
+
+metadata_to_redshift = PythonOperator(
+    task_id="metadata_to_redshift",
+    dag=dag,
+    python_callable=s3_to_redshift,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "table_name": "tracks_metadata",
+        "s3_bucket": "adeniyi-capstone-project",
+        "s3_key": "track_metadata/track_metadata"
+    }
+)
+
+start_operator >> create_tables
 create_tables >> stage_streams_redshift
+stage_streams_redshift >> enrich_streams_data
+enrich_streams_data >> metadata_to_redshift
