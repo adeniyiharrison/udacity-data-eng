@@ -112,7 +112,7 @@ def query_tracks(
     **kwargs
 ):
 
-    year = kwargs["year"]
+    year = kwargs["execution_date"].strftime("%Y")
 
     spc = return_spotipy_client()
     s3 = return_s3_client()
@@ -133,44 +133,49 @@ def query_tracks(
             )
         except Exception as e:
             logging.info(e)
-            continue
+            pass
 
 
 def s3_to_redshift(
     **kwargs
 ):
     connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    key = Variable.get("aws_key")
+    secret = Variable.get("aws_secret")
+
+    year = kwargs["execution_date"].strftime("%Y")
     table_name = kwargs["table_name"]
     s3_bucket = kwargs["s3_bucket"]
     s3_key = kwargs["s3_key"]
-
-    redshift = PostgresHook(connection_id)
-
     s3_path = "s3://{}/{}".format(s3_bucket, s3_key)
 
-    query = (
-        """
-            COPY {table_name}
-            FROM '{s3_path}'
-            ACCESS_KEY_ID '{key}'
-            SECRET_ACCESS_KEY '{secret}'
-            REGION AS 'us-west-1'
-            CSV;
-        """.format(
-            table_name=table_name,
-            s3_path=s3_path,
-            key=Variable.get("aws_key"),
-            secret=Variable.get("aws_secret")
-        )
-    )
+    redshift.run(
+        f"""
+        CREATE TEMP TABLE {table_name}_{year}_temp (LIKE {table_name});
 
-    redshift.run(query)
+        COPY {table_name}_{year}_temp
+        FROM '{s3_path}'
+        ACCESS_KEY_ID '{key}'
+        SECRET_ACCESS_KEY '{secret}'
+        REGION AS 'us-west-1'
+        CSV;
+
+        DELETE FROM {table_name}
+        USING {table_name}_{year}_temp
+        WHERE {table_name}.song_uri = {table_name}_{year}_temp.song_uri;
+
+        INSERT INTO {table_name}
+        SELECT *
+        FROM {table_name}_{year}_temp;
+        """
+    )
 
 
 default_args = {
     "owner": "adeniyi",
-    "start_date": datetime(2020, 6, 28),
-    "retries": 0,
+    "start_date": datetime(1960, 1, 1),
+    "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
     "catchup": False
@@ -180,89 +185,19 @@ dag = DAG(
     "capstone_project",
     default_args=default_args,
     description="Load and transform data in Redshift with Airflow",
-    schedule_interval="@daily"
+    schedule_interval="@yearly"
     )
 
 start_operator = DummyOperator(
-    task_id="Begin_execution",
+    task_id="start_operator",
     dag=dag
 )
 
-copy_trips_task_2010 = PythonOperator(
-    task_id="tracks_to_s3_2010",
+tracks_to_s3 = PythonOperator(
+    task_id="tracks_to_s3",
     dag=dag,
     python_callable=query_tracks,
-    op_kwargs={"year": "2010"}
-)
-
-copy_trips_task_2011 = PythonOperator(
-    task_id="tracks_to_s3_2011",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2011"}
-)
-
-copy_trips_task_2012 = PythonOperator(
-    task_id="tracks_to_s3_2012",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2012"}
-)
-
-copy_trips_task_2013 = PythonOperator(
-    task_id="tracks_to_s3_2013",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2013"}
-)
-
-copy_trips_task_2014 = PythonOperator(
-    task_id="tracks_to_s3_2014",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2014"}
-)
-
-copy_trips_task_2015 = PythonOperator(
-    task_id="tracks_to_s3_2015",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2015"}
-)
-
-copy_trips_task_2016 = PythonOperator(
-    task_id="tracks_to_s3_2016",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2016"}
-)
-
-copy_trips_task_2017 = PythonOperator(
-    task_id="tracks_to_s3_2017",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2017"}
-)
-
-copy_trips_task_2018 = PythonOperator(
-    task_id="tracks_to_s3_2018",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2018"}
-)
-
-copy_trips_task_2019 = PythonOperator(
-    task_id="tracks_to_s3_2019",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2019"}
-)
-
-copy_trips_task_2020 = PythonOperator(
-    task_id="tracks_to_s3_2020",
-    dag=dag,
-    python_callable=query_tracks,
-    op_kwargs={"year": "2020"}
+    provide_context=True
 )
 
 create_tables = PostgresOperator(
@@ -276,6 +211,7 @@ stage_redshift = PythonOperator(
     task_id="stage_redshift",
     dag=dag,
     python_callable=s3_to_redshift,
+    provide_context=True,
     op_kwargs={
         "redshift_conn_id": "redshift",
         "table_name": "tracks_staging",
@@ -284,32 +220,6 @@ stage_redshift = PythonOperator(
     }
 )
 
-start_operator >> stage_redshift
-
-start_operator >> [
-    copy_trips_task_2010,
-    copy_trips_task_2011,
-    copy_trips_task_2012,
-    copy_trips_task_2013,
-    copy_trips_task_2014,
-    copy_trips_task_2015,
-    copy_trips_task_2016,
-    copy_trips_task_2017,
-    copy_trips_task_2018,
-    copy_trips_task_2019,
-    copy_trips_task_2020
-    ]
-[
-    copy_trips_task_2010,
-    copy_trips_task_2011,
-    copy_trips_task_2012,
-    copy_trips_task_2013,
-    copy_trips_task_2014,
-    copy_trips_task_2015,
-    copy_trips_task_2016,
-    copy_trips_task_2017,
-    copy_trips_task_2018,
-    copy_trips_task_2019,
-    copy_trips_task_2020
-    ] >> create_tables
+start_operator >> tracks_to_s3
+tracks_to_s3 >> create_tables
 create_tables >> stage_redshift
