@@ -101,6 +101,21 @@ def dataframe_to_s3(
     )
 
 
+def tracks_qa(
+    **kwargs
+):
+    s3 = return_s3_client()
+    date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
+    key = f"track_metadata/track_metadata_{date_str}.csv"
+
+    objects = s3.list_objects(Bucket="adeniyi-capstone-project")
+
+    if key in objects:
+        pass
+    else:
+        raise ValueError("Data quality check failed")
+
+
 def enrich_streams_data(
     **kwargs
 ):
@@ -199,6 +214,28 @@ def s3_to_redshift(
     )
 
 
+def streams_qa(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    total_rows = redshift.get_records(
+       f"""
+            SELECT
+                COUNT(1) AS total_rows
+            FROM streams_staging
+            WHERE date = '{date}'
+        """
+    )
+
+    if int(total_rows[0][0]) > 0:
+        pass
+    else:
+        raise ValueError("Data quality check failed")
+
+
 def upsert_tracks(
     **kwargs
 ):
@@ -217,7 +254,7 @@ def upsert_tracks(
                 popularity,
                 explicit
                 )
-            SELECT
+            SELECT DISTINCT
                 t.track_url,
                 t.track_name,
                 t.duration,
@@ -250,117 +287,6 @@ def upsert_tracks(
     )
 
 
-def upsert_albums(
-    **kwargs
-):
-    connection_id = kwargs["redshift_conn_id"]
-    redshift = PostgresHook(connection_id)
-    date = kwargs["execution_date"].strftime("%Y-%m-%d")
-
-    redshift.run(
-        f"""
-            CREATE TEMP TABLE albums_temp (LIKE albums);
-
-            INSERT INTO albums_temp (
-                album_name,
-                album_type,
-                release_date
-                )
-            SELECT DISTINCT
-                t.album_name,
-                t.album_type,
-                t.album_release_date
-            FROM tracks_metadata t
-            LEFT JOIN streams_staging s
-                ON s.url = t.track_url
-            WHERE s.date = '{date}';
-
-            DELETE FROM albums
-            USING albums_temp
-            WHERE albums.album_name = albums_temp.album_name
-                AND albums.album_type = albums_temp.album_type
-                AND albums.release_date = albums.release_date;
-
-            INSERT INTO albums (
-                album_name,
-                album_type,
-                release_date
-                )
-            SELECT
-                album_name,
-                album_type,
-                release_date
-            FROM albums_temp;
-        """
-    )
-
-
-def upsert_regions(
-    **kwargs
-):
-    connection_id = kwargs["redshift_conn_id"]
-    redshift = PostgresHook(connection_id)
-    date = kwargs["execution_date"].strftime("%Y-%m-%d")
-
-    redshift.run(
-        f"""
-            CREATE TEMP TABLE regions_temp (LIKE regions);
-
-            INSERT INTO regions_temp (
-                region_name
-                )
-            SELECT DISTINCT
-                region
-            FROM streams_staging
-            WHERE date = '{date}';
-
-            DELETE FROM regions
-            USING regions_temp
-            WHERE regions.region_name = regions_temp.region_name;
-
-            INSERT INTO regions (
-                region_name
-                )
-            SELECT
-                region_name
-            FROM regions_temp;
-        """
-    )
-
-
-def upsert_artists(
-    **kwargs
-):
-    connection_id = kwargs["redshift_conn_id"]
-    redshift = PostgresHook(connection_id)
-    date = kwargs["execution_date"].strftime("%Y-%m-%d")
-
-    redshift.run(
-        f"""
-            CREATE TEMP TABLE artists_temp (LIKE artists);
-
-            INSERT INTO artists_temp (
-                artist_name
-                )
-            SELECT DISTINCT
-                artist
-            FROM streams_staging
-            WHERE date = '{date}';
-
-            DELETE FROM artists
-            USING artists_temp
-            WHERE artists.artist_name = artists_temp.artist_name;
-
-            INSERT INTO artists (
-                artist_name
-                )
-            SELECT
-                artist_name
-            FROM artists_temp;
-        """
-    )
-
-
 def upsert_streams(
     **kwargs
 ):
@@ -370,10 +296,33 @@ def upsert_streams(
 
     redshift.run(
         f"""
-            
+            CREATE TEMP TABLE streams_temp (LIKE streams);
+
+            INSERT INTO streams_temp
+            SELECT DISTINCT
+                ss.date AS event_stamp_date,
+                ss.position AS position,
+                t.track_id AS track_id,
+                ss.artist AS artist_name,
+                ss.region AS region_name,
+                ss.streams stream_count
+            FROM streams_staging ss
+            LEFT JOIN tracks t
+                ON ss.url = t.track_url
+            WHERE ss.date = '{date}'
+            ORDER BY ss.position
+
+
+            DELETE FROM streams
+            USING streams_temp
+            WHERE streams.event_stamp_date = streams_temp.event_stamp_date
+                AND streams.position = streams_temp.position;
+
+            INSERT INTO streams
+            SELECT *
+            FROM streams_temp;
         """
     )
-
 
 
 default_args = {
@@ -419,6 +368,24 @@ stage_streams_redshift = PythonOperator(
     }
 )
 
+redshift_streams_qa = PythonOperator(
+    task_id="redshift_streams_qa",
+    dag=dag,
+    python_callable=streams_qa,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "table_name": "streams_staging"
+    }
+)
+
+s3_tracks_qa = PythonOperator(
+    task_id="s3_tracks_qa",
+    dag=dag,
+    python_callable=tracks_qa,
+    provide_context=True
+)
+
 enrich_streams_data = PythonOperator(
     task_id="enrich_streams_data",
     dag=dag,
@@ -445,5 +412,7 @@ metadata_to_redshift = PythonOperator(
 
 start_operator >> create_tables
 create_tables >> stage_streams_redshift
-stage_streams_redshift >> enrich_streams_data
-enrich_streams_data >> metadata_to_redshift
+stage_streams_redshift >> redshift_streams_qa
+redshift_streams_qa >> enrich_streams_data
+enrich_streams_data >> s3_tracks_qa
+s3_tracks_qa >> metadata_to_redshift
