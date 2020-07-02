@@ -199,10 +199,187 @@ def s3_to_redshift(
     )
 
 
+def upsert_tracks(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    redshift.run(
+        f"""
+            CREATE TEMP TABLE tracks_temp (LIKE tracks);
+
+            INSERT INTO tracks_temp (
+                track_url,
+                track_name,
+                duration,
+                popularity,
+                explicit
+                )
+            SELECT
+                t.track_url,
+                t.track_name,
+                t.duration,
+                t.popularity,
+                t.explicit
+            FROM tracks_metadata t
+            LEFT JOIN streams_staging s
+                ON s.url = t.track_url
+            WHERE s.date = '{date}';
+
+            DELETE FROM tracks
+            USING tracks_temp
+            WHERE tracks.track_url = tracks_temp.track_url;
+
+            INSERT INTO tracks (
+                track_url,
+                track_name,
+                duration,
+                popularity,
+                explicit
+                )
+            SELECT
+                track_url,
+                track_name,
+                duration,
+                popularity,
+                explicit
+            FROM tracks_temp;
+        """
+    )
+
+
+def upsert_albums(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    redshift.run(
+        f"""
+            CREATE TEMP TABLE albums_temp (LIKE albums);
+
+            INSERT INTO albums_temp (
+                album_name,
+                album_type,
+                release_date
+                )
+            SELECT DISTINCT
+                t.album_name,
+                t.album_type,
+                t.album_release_date
+            FROM tracks_metadata t
+            LEFT JOIN streams_staging s
+                ON s.url = t.track_url
+            WHERE s.date = '{date}';
+
+            DELETE FROM albums
+            USING albums_temp
+            WHERE albums.album_name = albums_temp.album_name
+                AND albums.album_type = albums_temp.album_type
+                AND albums.release_date = albums.release_date;
+
+            INSERT INTO albums (
+                album_name,
+                album_type,
+                release_date
+                )
+            SELECT
+                album_name,
+                album_type,
+                release_date
+            FROM albums_temp;
+        """
+    )
+
+
+def upsert_regions(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    redshift.run(
+        f"""
+            CREATE TEMP TABLE regions_temp (LIKE regions);
+
+            INSERT INTO regions_temp (
+                region_name
+                )
+            SELECT DISTINCT
+                region
+            FROM streams_staging
+            WHERE date = '{date}';
+
+            DELETE FROM regions
+            USING regions_temp
+            WHERE regions.region_name = regions_temp.region_name;
+
+            INSERT INTO regions (
+                region_name
+                )
+            SELECT
+                region_name
+            FROM regions_temp;
+        """
+    )
+
+
+def upsert_artists(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    redshift.run(
+        f"""
+            CREATE TEMP TABLE artists_temp (LIKE artists);
+
+            INSERT INTO artists_temp (
+                artist_name
+                )
+            SELECT DISTINCT
+                artist
+            FROM streams_staging
+            WHERE date = '{date}';
+
+            DELETE FROM artists
+            USING artists_temp
+            WHERE artists.artist_name = artists_temp.artist_name;
+
+            INSERT INTO artists (
+                artist_name
+                )
+            SELECT
+                artist_name
+            FROM artists_temp;
+        """
+    )
+
+
+def upsert_streams(
+    **kwargs
+):
+    connection_id = kwargs["redshift_conn_id"]
+    redshift = PostgresHook(connection_id)
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
+
+    redshift.run(
+        f"""
+            
+        """
+    )
+
+
+
 default_args = {
     "owner": "adeniyi",
-    "start_date": datetime(2017, 1, 1),
-    "end_date": datetime(2017, 1, 2),
+    "start_date": datetime(2017, 1, 10),
+    "end_date": datetime(2017, 1, 31),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
