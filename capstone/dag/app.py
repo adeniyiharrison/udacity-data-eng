@@ -12,6 +12,7 @@ from airflow.operators import PostgresOperator
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.python_operator import PythonOperator
+from sql_queries import SqlQueries
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,47 +59,21 @@ def stage_streams(
     s3_path = "s3://{}/{}".format(s3_bucket, s3_key)
 
     total_records = redshift.get_records(
-        f"""
-            SELECT
-                COUNT(1) AS total_records
-            FROM {table_name}
-
-        """
+        SqlQueries.count_records_query.format(
+            table_name=table_name
+        )
     )
     total_records = total_records[0][0]
 
     if total_records == 0:
         redshift.run(
-            f"""
-                COPY {table_name}
-                FROM '{s3_path}'
-                ACCESS_KEY_ID '{key}'
-                SECRET_ACCESS_KEY '{secret}'
-                REGION AS 'us-west-1'
-                IGNOREHEADER 1
-                CSV;
-            """
+            SqlQueries.streams_copy_query.format(
+                table_name=table_name,
+                s3_path=s3_path,
+                key=key,
+                secret=secret
+            )
         )
-
-
-def dataframe_to_s3(
-    s3_client,
-    dataframe,
-    key
-):
-
-    csv_buffer = StringIO()
-    dataframe.to_csv(
-        csv_buffer,
-        index=False,
-        header=False
-    )
-
-    s3_client.put_object(
-        Body=csv_buffer.getvalue(),
-        Bucket="adeniyi-capstone-project",
-        Key=key
-    )
 
 
 def tracks_qa(
@@ -129,21 +104,35 @@ def enrich_streams_data(
         Hit Spotify API via Spotipy library
     """
 
-    date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
+    def dataframe_to_s3(
+        s3_client,
+        dataframe,
+        key
+    ):
+
+        csv_buffer = StringIO()
+        dataframe.to_csv(
+            csv_buffer,
+            index=False,
+            header=False
+        )
+
+        s3_client.put_object(
+            Body=csv_buffer.getvalue(),
+            Bucket="adeniyi-capstone-project",
+            Key=key
+        )
+
+    date = kwargs["execution_date"].strftime("%Y-%m-%d")
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     spc = return_spotipy_client()
     s3 = return_s3_client()
 
     daily_streams = redshift.get_records(
-        f"""
-            SELECT
-                track_name,
-                artist AS artist_name,
-                url AS track_url
-            FROM streams_staging
-            WHERE date = '{date_str}'
-        """
+        SqlQueries.enrich_streams_query.format(
+            date=date
+        )
     )
 
     track_results = []
@@ -179,7 +168,7 @@ def enrich_streams_data(
     dataframe_to_s3(
         s3_client=s3,
         dataframe=track_results,
-        key=f"track_metadata/track_metadata_{date_str}.csv"
+        key=f"track_metadata/track_metadata_{date}.csv"
     )
 
 
@@ -198,25 +187,12 @@ def s3_to_redshift(
     s3_path = f"s3://{s3_bucket}/{s3_key}_{date}"
 
     redshift.run(
-        f"""
-            CREATE TEMP TABLE {table_name}_temp (LIKE {table_name});
-
-            COPY {table_name}_temp
-            FROM '{s3_path}'
-            ACCESS_KEY_ID '{key}'
-            SECRET_ACCESS_KEY '{secret}'
-            REGION AS 'us-west-1'
-            DELIMITER ','
-            CSV;
-
-            DELETE FROM {table_name}
-            USING {table_name}_temp
-            WHERE {table_name}.track_url = {table_name}_temp.track_url;
-
-            INSERT INTO {table_name}
-            SELECT *
-            FROM {table_name}_temp;
-        """
+        SqlQueries.s3_to_redshift_query.format(
+            table_name=table_name,
+            s3_path=s3_path,
+            key=key,
+            secret=secret
+        )
     )
 
 
@@ -228,12 +204,9 @@ def streams_qa(
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
 
     total_rows = redshift.get_records(
-       f"""
-            SELECT
-                COUNT(1) AS total_rows
-            FROM streams_staging
-            WHERE date = '{date}'
-        """
+        SqlQueries.streams_qa_qyery.format(
+            date=date
+        )
     )
 
     if int(total_rows[0][0]) > 0:
@@ -250,45 +223,9 @@ def upsert_tracks(
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
 
     redshift.run(
-        f"""
-            CREATE TEMP TABLE tracks_temp (LIKE tracks);
-
-            INSERT INTO tracks_temp (
-                track_url,
-                track_name,
-                duration,
-                popularity,
-                explicit
-                )
-            SELECT DISTINCT
-                t.track_url,
-                t.track_name,
-                t.duration,
-                t.popularity,
-                t.explicit
-            FROM tracks_metadata t
-            LEFT JOIN streams_staging s
-                ON s.url = t.track_url
-            WHERE s.date = '{date}';
-
-            INSERT INTO tracks (
-                track_url,
-                track_name,
-                duration,
-                popularity,
-                explicit
-                )
-            SELECT
-                tt.track_url,
-                tt.track_name,
-                tt.duration,
-                tt.popularity,
-                tt.explicit
-            FROM tracks_temp tt
-            LEFT JOIN tracks t
-                ON tt.track_url = t.track_url
-            WHERE t.track_name IS NULL;      
-        """
+        SqlQueries.upsert_tracks_query.format(
+            date=date
+        )
     )
 
 
@@ -300,33 +237,9 @@ def upsert_streams(
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
 
     redshift.run(
-        f"""
-            CREATE TEMP TABLE streams_temp (LIKE streams);
-
-            INSERT INTO streams_temp
-            SELECT DISTINCT
-                ss.date AS event_stamp_date,
-                ss.position AS position,
-                t.track_id AS track_id,
-                ss.artist AS artist_name,
-                ss.region AS region_name,
-                ss.streams stream_count
-            FROM streams_staging ss
-            LEFT JOIN tracks t
-                ON ss.url = t.track_url
-            WHERE ss.date = '{date}'
-            ORDER BY ss.position;
-
-
-            DELETE FROM streams
-            USING streams_temp
-            WHERE streams.event_stamp_date = streams_temp.event_stamp_date
-                AND streams.position = streams_temp.position;
-
-            INSERT INTO streams
-            SELECT *
-            FROM streams_temp;
-        """
+        SqlQueries.upsert_streams_query.format(
+            date=date
+        )
     )
 
 
@@ -345,16 +258,10 @@ dag = DAG(
     default_args=default_args,
     description="Load and transform data in Redshift with Airflow",
     schedule_interval="@daily"
-    # schedule_interval=None
     )
 
 start_operator = DummyOperator(
     task_id="start_operator",
-    dag=dag
-)
-
-end_operator = DummyOperator(
-    task_id="end_operator",
     dag=dag
 )
 
@@ -438,6 +345,11 @@ upsert_streams = PythonOperator(
     op_kwargs={
         "redshift_conn_id": "redshift"
     }
+)
+
+end_operator = DummyOperator(
+    task_id="end_operator",
+    dag=dag
 )
 
 start_operator >> create_tables
