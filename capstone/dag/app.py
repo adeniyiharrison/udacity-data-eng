@@ -216,6 +216,7 @@ def s3_to_redshift(
         )
     )
 
+
 def tracks_qa(
     **kwargs
 ):
@@ -316,7 +317,7 @@ def upsert_streams(
 default_args = {
     "owner": "adeniyi",
     "start_date": datetime(2017, 2, 1),
-    "end_date": datetime(2017, 2, 3),
+    "end_date": datetime(2017, 3, 1),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
