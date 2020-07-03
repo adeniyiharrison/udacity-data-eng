@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS tracks_metadata (
 	explicit BOOLEAN
 )sortkey(track_url);
 
-# Fact
 CREATE TABLE IF NOT EXISTS streams (
 	event_stamp_date DATE,
 	position INTEGER,
@@ -30,7 +29,6 @@ CREATE TABLE IF NOT EXISTS streams (
 	stream_count INTEGER
 	);
 
-# Dimension
 CREATE TABLE IF NOT EXISTS tracks (
 	track_id INTEGER IDENTITY(1, 1),
 	track_url VARCHAR,

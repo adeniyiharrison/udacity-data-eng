@@ -108,7 +108,13 @@ def tracks_qa(
     date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
     key = f"track_metadata/track_metadata_{date_str}.csv"
 
-    objects = s3.list_objects(Bucket="adeniyi-capstone-project")
+    objects = s3.list_objects(
+        Bucket="adeniyi-capstone-project",
+        Prefix="track_metadata"
+    )
+    objects = [x["Key"] for x in objects["Contents"]]
+
+    logging.info(objects)
 
     if key in objects:
         pass
@@ -265,10 +271,6 @@ def upsert_tracks(
                 ON s.url = t.track_url
             WHERE s.date = '{date}';
 
-            DELETE FROM tracks
-            USING tracks_temp
-            WHERE tracks.track_url = tracks_temp.track_url;
-
             INSERT INTO tracks (
                 track_url,
                 track_name,
@@ -277,12 +279,15 @@ def upsert_tracks(
                 explicit
                 )
             SELECT
-                track_url,
-                track_name,
-                duration,
-                popularity,
-                explicit
-            FROM tracks_temp;
+                tt.track_url,
+                tt.track_name,
+                tt.duration,
+                tt.popularity,
+                tt.explicit
+            FROM tracks_temp tt
+            LEFT JOIN tracks t
+                ON tt.track_url = t.track_url
+            WHERE t.track_name IS NULL;      
         """
     )
 
@@ -310,7 +315,7 @@ def upsert_streams(
             LEFT JOIN tracks t
                 ON ss.url = t.track_url
             WHERE ss.date = '{date}'
-            ORDER BY ss.position
+            ORDER BY ss.position;
 
 
             DELETE FROM streams
@@ -327,8 +332,8 @@ def upsert_streams(
 
 default_args = {
     "owner": "adeniyi",
-    "start_date": datetime(2017, 1, 10),
-    "end_date": datetime(2017, 1, 31),
+    "start_date": datetime(2017, 2, 1),
+    "end_date": datetime(2017, 2, 2),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
@@ -345,6 +350,11 @@ dag = DAG(
 
 start_operator = DummyOperator(
     task_id="start_operator",
+    dag=dag
+)
+
+end_operator = DummyOperator(
+    task_id="end_operator",
     dag=dag
 )
 
@@ -379,13 +389,6 @@ redshift_streams_qa = PythonOperator(
     }
 )
 
-s3_tracks_qa = PythonOperator(
-    task_id="s3_tracks_qa",
-    dag=dag,
-    python_callable=tracks_qa,
-    provide_context=True
-)
-
 enrich_streams_data = PythonOperator(
     task_id="enrich_streams_data",
     dag=dag,
@@ -395,6 +398,13 @@ enrich_streams_data = PythonOperator(
         "redshift_conn_id": "redshift",
         "table_name": "streams_staging"
     }
+)
+
+s3_tracks_qa = PythonOperator(
+    task_id="s3_tracks_qa",
+    dag=dag,
+    python_callable=tracks_qa,
+    provide_context=True
 )
 
 metadata_to_redshift = PythonOperator(
@@ -410,9 +420,32 @@ metadata_to_redshift = PythonOperator(
     }
 )
 
+upsert_tracks = PythonOperator(
+    task_id="upsert_tracks",
+    dag=dag,
+    python_callable=upsert_tracks,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift"
+    }
+)
+
+upsert_streams = PythonOperator(
+    task_id="upsert_streams",
+    dag=dag,
+    python_callable=upsert_streams,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift"
+    }
+)
+
 start_operator >> create_tables
 create_tables >> stage_streams_redshift
 stage_streams_redshift >> redshift_streams_qa
 redshift_streams_qa >> enrich_streams_data
 enrich_streams_data >> s3_tracks_qa
 s3_tracks_qa >> metadata_to_redshift
+metadata_to_redshift >> upsert_tracks
+upsert_tracks >> upsert_streams
+upsert_streams >> end_operator
