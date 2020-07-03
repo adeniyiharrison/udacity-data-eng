@@ -2,8 +2,12 @@
 
 ## Project Scope
 * This script gathers the 200 daily most streamed songs in 53 countries for the period between 2017-01-01 and 2018-01-09 from [Kaggle](https://www.kaggle.com/edumucelli/spotifys-worldwide-daily-song-ranking/data)
+    * This dataset contains the daily ranking of the 200 most listened songs in 53 countries from 2017 and 2018 by Spotify users. It contains more than 2 million rows, which comprises 6629 artists, 18598 songs for a total count of one hundred five billion streams count.
     * Placed in [personal S3 Bucket](https://s3.console.aws.amazon.com/s3/buckets/adeniyi-capstone-project/?region=us-west-1&tab=overview)
-* Via airflow the script incrementaily moves through this day by day and seaches the Spotify API to enrich the songs with additiona track metadata
+    * The script will migrate this data over to a Redshift staging table
+* Via airflow the script incrementaily moves through this day by day and seaches the Spotify API to enrich the songs with additional track metadata
+    * This track metadata is then stored in [S3](https://s3.console.aws.amazon.com/s3/buckets/adeniyi-capstone-project/track_metadata/?region=us-west-1&tab=overview)
+    * The metadata is finally copied over to a Redshift staging table
 * With this data the following staging tables are made
 
 ![Staging-Schema](img/staging_schema.png)
