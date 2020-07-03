@@ -21,6 +21,12 @@ logging.basicConfig(
 
 
 def return_spotipy_client():
+    """
+        Create spotipy client to interact with Spotify API
+
+        Returns:
+            spotipy client
+    """
     ccm = oauth2.SpotifyClientCredentials(
         client_id=Variable.get("spotify_client_id"),
         client_secret=Variable.get("spotify_client_secret")
@@ -34,6 +40,12 @@ def return_spotipy_client():
 
 
 def return_s3_client():
+    """
+        Create s3 client to interact with S3
+
+        Returns:
+            s3 client
+    """    
 
     s3 = boto3.client(
         "s3",
@@ -48,6 +60,17 @@ def return_s3_client():
 def stage_streams(
     **kwargs
 ):
+    """
+        Create s3 client to interact with S3
+
+        Args:
+            redshift_conn_id: Name of airflow redshift connection
+            table_name: Stream Staging table name
+            s3_bucket: S3 Bucket Name
+            s3_key: S3 Key
+
+    """
+
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     key = Variable.get("aws_key")
@@ -76,32 +99,17 @@ def stage_streams(
         )
 
 
-def tracks_qa(
-    **kwargs
-):
-    s3 = return_s3_client()
-    date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
-    key = f"track_metadata/track_metadata_{date_str}.csv"
-
-    objects = s3.list_objects(
-        Bucket="adeniyi-capstone-project",
-        Prefix="track_metadata"
-    )
-    objects = [x["Key"] for x in objects["Contents"]]
-
-    logging.info(objects)
-
-    if key in objects:
-        pass
-    else:
-        raise ValueError("Data quality check failed")
-
-
 def enrich_streams_data(
     **kwargs
 ):
     """
-        Hit Spotify API via Spotipy library
+        Hit Spotify API to return additional tracks metadata
+
+        Args:
+            Execution Date: Date of pipeline run
+            Redshift_conn_id: Name of airflow redshift connection
+            table_name: Stream Staging table name
+
     """
 
     def dataframe_to_s3(
@@ -175,6 +183,19 @@ def enrich_streams_data(
 def s3_to_redshift(
     **kwargs
 ):
+
+    """
+        Copy CSVs from s3 to Redshift DB
+
+        Args:
+            Execution Date: Date of pipeline run
+            redshift_conn_id: Name of airflow redshift connection
+            table_name: Tracks Metadata table name
+            s3_bucket: S3 Bucket Name
+            s3_key: S3 Key
+
+    """
+
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     key = Variable.get("aws_key")
@@ -195,10 +216,46 @@ def s3_to_redshift(
         )
     )
 
+def tracks_qa(
+    **kwargs
+):
+
+    """
+        Ensure tracks metadata table was correctly placed in s3
+
+        Args:
+            Execution Date: Date of pipeline run
+
+    """
+
+    s3 = return_s3_client()
+    date_str = kwargs["execution_date"].strftime("%Y-%m-%d")
+    key = f"track_metadata/track_metadata_{date_str}.csv"
+
+    objects = s3.list_objects(
+        Bucket="adeniyi-capstone-project",
+        Prefix="track_metadata"
+    )
+    objects = [x["Key"] for x in objects["Contents"]]
+
+    logging.info(objects)
+
+    if key in objects:
+        pass
+    else:
+        raise ValueError("Data quality check failed")
+
 
 def streams_qa(
     **kwargs
 ):
+
+    """
+        Ensure streaming data was correctly placed
+
+        Args:
+            Execution Date: Date of pipeline run        
+    """
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
@@ -218,6 +275,13 @@ def streams_qa(
 def upsert_tracks(
     **kwargs
 ):
+
+    """
+        Insert / Update results in tracks table
+
+        Args:
+            Execution Date: Date of pipeline run        
+    """
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
@@ -232,6 +296,12 @@ def upsert_tracks(
 def upsert_streams(
     **kwargs
 ):
+    """
+        Insert / Update results in streams table
+
+        Args:
+            Execution Date: Date of pipeline run        
+    """
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
@@ -246,7 +316,7 @@ def upsert_streams(
 default_args = {
     "owner": "adeniyi",
     "start_date": datetime(2017, 2, 1),
-    "end_date": datetime(2017, 2, 2),
+    "end_date": datetime(2017, 2, 3),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
