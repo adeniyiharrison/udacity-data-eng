@@ -316,8 +316,8 @@ def upsert_streams(
 
 default_args = {
     "owner": "adeniyi",
-    "start_date": datetime(2017, 2, 1),
-    "end_date": datetime(2017, 3, 1),
+    "start_date": datetime(2017, 1, 1),
+    "end_date": datetime(2017, 2, 5),
     "retries": 1,
     "retry_delay": timedelta(minutes=1),
     "depends_on_past": False,
