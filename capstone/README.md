@@ -1,16 +1,16 @@
 # Capstone
 
-The goal of this project/pipeline is to collect and organize Spotify top streaming data from 2017 and provide additional metadata about these popular songs. The final resulting star schema built in Redshift will allow Analysts to identify trends about the artist, tracks, albums and regions without accessing the underlying data sources.
+The goal of this project/pipeline is to collect and organize Spotify top streaming data from 2017-2018 and provide additional metadata about these popular songs. The final resulting star schema built in Redshift will allow analysts and other end users to identify trends about the artist, tracks, albums and regions without accessing the underlying data sources.
 
 ## Data Details
 * This script gathers the 200 daily most streamed songs in 53 countries for the period between 2017-01-01 and 2018-01-09 from [Kaggle](https://www.kaggle.com/edumucelli/spotifys-worldwide-daily-song-ranking/data)
-    * This dataset contains the daily ranking of the 200 most listened songs in 53 countries from 2017 and 2018 by Spotify users. It contains more than 2 million rows, which comprises 6629 artists, 18598 songs for a total count of one hundred five billion streams count.
+    * This dataset contains the daily ranking of the 200 most listened songs in 53 countries from 2017 and 2018 by Spotify users. It contains more than 2 million rows, which comprises 6,629 artists, 18,598 songs for a total count of one hundred five billion streams count.
 * This streaming data is enriched with data from the [Spotify API](https://developer.spotify.com/documentation/web-api/quick-start/)
     * The API is interacted with using the [Spotipy Library](https://spotipy.readthedocs.io/en/2.13.0/#)
 
 ## Airflow
 
-The script is ran using DAGs (Directed Acyclic Graphs) which is executed on Apache Airflow (more detials on setup foound in "Getting Started and Running Script" section below). I used Airflow to orchestrate the ETL process and maintain their correct frequency along with a PostgreSQL database. Along with managing/maintaing the frequency and ordering of the tasks, Airflow makes backfilling the years plus data easy. As soon as more streaming data is available and closer to real time, I shouldnt have to make any large fundamental changes to the script thanks to Airflow.
+The script is ran using DAGs (Directed Acyclic Graphs) which is executed on Apache Airflow (more detials on setup found in "Getting Started and Running Script" section below). I used Airflow to orchestrate the ETL process and maintain the tasks correct frequency along with maintaing credentials for my Redshift database, AWS IAM user and Spotify API. In addition to features I just mentioned, Airflow makes backfilling the years plus data easy which is really important in this use case. As soon as more streaming data is available and closer to real time, I shouldnt have to make any large fundamental changes to the script with Airflow too.
 
 ## Project Steps
 
