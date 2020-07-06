@@ -1,22 +1,56 @@
 # Capstone
 
-## Project Scope
+The goal of this project/pipeline is to collect and organize Spotify top streaming data from 2017 and provide additional metadata about these popular songs. The final resulting star schema built in Redshift will allow Analysts to identify trends about the artist, tracks, albums and regions without accessing the underlying data sources.
+
+## Data Details
 * This script gathers the 200 daily most streamed songs in 53 countries for the period between 2017-01-01 and 2018-01-09 from [Kaggle](https://www.kaggle.com/edumucelli/spotifys-worldwide-daily-song-ranking/data)
     * This dataset contains the daily ranking of the 200 most listened songs in 53 countries from 2017 and 2018 by Spotify users. It contains more than 2 million rows, which comprises 6629 artists, 18598 songs for a total count of one hundred five billion streams count.
-    * Placed in [personal S3 Bucket](https://s3.console.aws.amazon.com/s3/buckets/adeniyi-capstone-project/?region=us-west-1&tab=overview)
-    * The script will migrate this data over to a Redshift staging table
-* Via airflow the script incrementaily moves through this day by day and seaches the Spotify API to enrich the songs with additional track metadata
-    * This track metadata is then stored in [S3](https://s3.console.aws.amazon.com/s3/buckets/adeniyi-capstone-project/track_metadata/?region=us-west-1&tab=overview)
-    * The metadata is finally copied over to a Redshift staging table
-* With this data the following staging tables are made
+* This streaming data is enriched with data from the [Spotify API](https://developer.spotify.com/documentation/web-api/quick-start/)
+    * The API is interacted with using the [Spotipy Library](https://spotipy.readthedocs.io/en/2.13.0/#)
 
-![Staging-Schema](img/staging_schema.png)
+## Airflow
 
-* Additional processing is performed to create the following tables
+The script is ran using DAGs (Directed Acyclic Graphs) which is executed on Apache Airflow (more detials on setup foound in "Getting Started and Running Script" section below). I used Airflow to orchestrate the ETL process and maintain their correct frequency along with a PostgreSQL database. Along with managing/maintaing the frequency and ordering of the tasks, Airflow makes backfilling the years plus data easy. As soon as more streaming data is available and closer to real time, I shouldnt have to make any large fundamental changes to the script thanks to Airflow.
 
-![Current-Schema](img/current_schema.png)
+## Project Steps
 
-* If I were to continue with the same process as I did for the tracks table for the other dimensions I would end up with a true star schema
+![dag](img/airflow_dag.png)
+
+The project steps can be followed by referencing the DAG and the associated tasks. (`start_operator` and `end_operator` are DummyOperators and do not perform tasks). 
+
+1. __Create_Tables__
+    * The first step is to create the staging tables (if they dont already exist) as well as all the tables that will make up the star schema in the redshift cluster.
+
+2. __Stage_Streams_Redshift__
+    * Populate the `streams_staging` table using `COPY` commands from s3 to Redshift
+
+3. __Redshift_Streams_QA__
+    * Data Quality Check
+    * Ensure all the streaming data has been copied for the day by checking that all 53 countries are found in `streams_staging` table
+
+4. __Enrich_Streams_Data__
+    * Gather metadata from Spotify API about tracks found in `streams_staging` for the day
+    * Store additional tracks metadata in S3
+
+5. __S3_Tracks_QA__
+    * Data Quality Check
+    * Perform a unit test to ensure that tracks metadata CSV for the day has been successfully added to s3
+
+6. __Metadata_to_Redshift__
+    * Update `tracks_metadata` with additional tracks metadata using `COPY` command from s3 to Redshift
+
+7. __Upsert Tables__
+    * Upsert into `tracks`, `albums`, `artists` and `regions`
+    * Now that all the necessary data is in Redshift, lets update all the dimension tables with any new information
+
+8. __Upsert Streams__
+    * Finally lets update the fact table in the schema with streaming data for the day
+    * Create `id` fields to link to dimension tables for further analysis
+
+## Final Data Model
+This data model was selected because the `streams` (fact table) includes all the information needed to analyze the most popular songs in each region but if you would like additional details you can always join with the dimension needed but none of the dimensions you do not need. For example, if an analyst wants to specifically to analyze albums information they could without pulling in any data that is not pertinent.
+
+Additionally as the data set continues to grow there will remain clear and logical differences between the tables and it is clear where specific data points should live.  
 
 ![Star-Schema](img/star_schema.png)
 
@@ -26,20 +60,41 @@ __Streams__
 |------------------|-------------------------------------------------|
 | event_stamp_date | date of song play                               |
 | position         | popularity ranking on respective day and region |
-| track_id         | track identifier (foreign key to tracks table)  |
-| artist_name      | name of artist                                  |
-| region_name      | region of song ranking                          |
-| stream_count     | total number of song plays                      |
+| track_id         | unique track identifier                         |
+| artist_id        | unique artist identifier                        |
+| album_id         | unique album identifier                         |
+| region_id        | unique region identifier                        |
+| stream_count     | total number of song streams                    |
 
 __tracks__
 | Column Name | Definition                     |
 |-------------|--------------------------------|
-| track_id    | track identifier               |
+| track_id    | unique track identifier        |
 | track_url   | spotify URL of song            |
 | track_name  | Name of song                   |
 | duration    | length of song in milliseconds |
 | popularity  | Spotify's popularity scale     |
 | explicit    | does song contain profanity    |
+
+__artists__
+| Column Name | Definition                     |
+|-------------|--------------------------------|
+| artist_id   | unique artist identifier       |
+| artist_name | name of artist                 |
+
+__albums__
+| Column Name | Definition                     |
+|-------------|--------------------------------|
+| album_id    | unique album identifier        |
+| album_name  | name of album                  |
+| album_type  | type of album (album/complilation/single) |
+| release_date  | date of album release        |
+
+__regions__
+| Column Name | Definition                     |
+|-------------|--------------------------------|
+| region_id   | unique region identifier       |
+| region_name | region of song stream          |
 
 
 ## Addressing Other Scenarios
@@ -54,7 +109,7 @@ __tracks__
     * Again would need to increase Redshift cluster resources to account for the increase
     * Lock down tables with additional permissions to prevent incorrect data manipulation
 
-## Running Script
+## Getting Started and Running Script
 1. Create an app on [Spotify Developers](https://developers.spotify.com/) to retreive your ID and SECRET
 2. Download Spotipy, a lightweight Python library for Spotify Web API.
     * `pip install spotipy`

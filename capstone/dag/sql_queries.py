@@ -24,9 +24,9 @@ class SqlQueries:
         WHERE date = '{date}'
     """
 
-    streams_qa_qyery = """
+    streams_qa_query = """
         SELECT
-            COUNT(1) AS total_rows
+            COUNT(DISTINCT region) AS total_regions
         FROM streams_staging
         WHERE date = '{date}'
     """

@@ -222,7 +222,8 @@ def tracks_qa(
 ):
 
     """
-        Ensure tracks metadata table was correctly placed in s3
+        Unit test to ensure tracks metadata table was correctly placed in s3
+
 
         Args:
             Execution Date: Date of pipeline run
@@ -244,7 +245,9 @@ def tracks_qa(
     if key in objects:
         pass
     else:
-        raise ValueError("Data quality check failed")
+        raise ValueError(
+            "Data quality check failed. Tracks metadata is missing from s3"
+        )
 
 
 def streams_qa(
@@ -252,25 +255,28 @@ def streams_qa(
 ):
 
     """
-        Ensure streaming data was correctly placed
+        Ensure streaming data was correctly placed.
+        The stream data should include at least 53 regions
 
         Args:
-            Execution Date: Date of pipeline run        
+            Execution Date: Date of pipeline run
     """
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
 
     total_rows = redshift.get_records(
-        SqlQueries.streams_qa_qyery.format(
+        SqlQueries.streams_qa_query.format(
             date=date
         )
     )
 
-    if int(total_rows[0][0]) > 0:
+    if int(total_rows[0][0]) >= 53:
         pass
     else:
-        raise ValueError("Data quality check failed")
+        raise ValueError(
+            "Data quality check failed. Missing some region data"
+        )
 
 
 def upsert_sql(
