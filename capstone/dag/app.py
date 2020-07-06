@@ -273,42 +273,22 @@ def streams_qa(
         raise ValueError("Data quality check failed")
 
 
-def upsert_tracks(
-    **kwargs
-):
-
-    """
-        Insert / Update results in tracks table
-
-        Args:
-            Execution Date: Date of pipeline run        
-    """
-    connection_id = kwargs["redshift_conn_id"]
-    redshift = PostgresHook(connection_id)
-    date = kwargs["execution_date"].strftime("%Y-%m-%d")
-
-    redshift.run(
-        SqlQueries.upsert_tracks_query.format(
-            date=date
-        )
-    )
-
-
-def upsert_streams(
+def upsert_sql(
     **kwargs
 ):
     """
-        Insert / Update results in streams table
+        Insert / Update results in sql tables
 
         Args:
-            Execution Date: Date of pipeline run        
+            Execution Date: Date of pipeline run
     """
     connection_id = kwargs["redshift_conn_id"]
     redshift = PostgresHook(connection_id)
+    sql = kwargs["sql"]
     date = kwargs["execution_date"].strftime("%Y-%m-%d")
 
     redshift.run(
-        SqlQueries.upsert_streams_query.format(
+        sql.format(
             date=date
         )
     )
@@ -401,20 +381,55 @@ metadata_to_redshift = PythonOperator(
 upsert_tracks = PythonOperator(
     task_id="upsert_tracks",
     dag=dag,
-    python_callable=upsert_tracks,
+    python_callable=upsert_sql,
     provide_context=True,
     op_kwargs={
-        "redshift_conn_id": "redshift"
+        "redshift_conn_id": "redshift",
+        "sql": SqlQueries.upsert_tracks_query
+    }
+)
+
+upsert_artists = PythonOperator(
+    task_id="upsert_artists",
+    dag=dag,
+    python_callable=upsert_sql,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "sql": SqlQueries.upsert_artists_query
+    }
+)
+
+upsert_albums = PythonOperator(
+    task_id="upsert_albums",
+    dag=dag,
+    python_callable=upsert_sql,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "sql": SqlQueries.upsert_albums_query
+    }
+)
+
+upsert_regions = PythonOperator(
+    task_id="upsert_regions",
+    dag=dag,
+    python_callable=upsert_sql,
+    provide_context=True,
+    op_kwargs={
+        "redshift_conn_id": "redshift",
+        "sql": SqlQueries.upsert_regions_query
     }
 )
 
 upsert_streams = PythonOperator(
     task_id="upsert_streams",
     dag=dag,
-    python_callable=upsert_streams,
+    python_callable=upsert_sql,
     provide_context=True,
     op_kwargs={
-        "redshift_conn_id": "redshift"
+        "redshift_conn_id": "redshift",
+        "sql": SqlQueries.upsert_streams_query
     }
 )
 
@@ -429,6 +444,16 @@ stage_streams_redshift >> redshift_streams_qa
 redshift_streams_qa >> enrich_streams_data
 enrich_streams_data >> s3_tracks_qa
 s3_tracks_qa >> metadata_to_redshift
-metadata_to_redshift >> upsert_tracks
-upsert_tracks >> upsert_streams
+metadata_to_redshift >> [
+    upsert_tracks,
+    upsert_artists,
+    upsert_albums,
+    upsert_regions
+]
+[
+    upsert_tracks,
+    upsert_artists,
+    upsert_albums,
+    upsert_regions
+] >> upsert_streams
 upsert_streams >> end_operator

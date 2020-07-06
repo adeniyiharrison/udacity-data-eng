@@ -24,8 +24,9 @@ CREATE TABLE IF NOT EXISTS streams (
 	event_stamp_date DATE,
 	position INTEGER,
 	track_id INTEGER,
-	artist_name VARCHAR,
-	region_name VARCHAR,
+	artist_id INTEGER,
+    album_id INTEGER,
+	region_id INTEGER,
 	stream_count INTEGER
 	);
 
@@ -37,3 +38,20 @@ CREATE TABLE IF NOT EXISTS tracks (
 	popularity INTEGER,
 	explicit BOOLEAN
 	)sortkey(track_id);
+
+CREATE TABLE IF NOT EXISTS artists (
+	artist_id INTEGER IDENTITY(1, 1),
+	artist_name VARCHAR
+	)sortkey(artist_id);    
+
+CREATE TABLE IF NOT EXISTS albums (
+	album_id INTEGER IDENTITY(1, 1),
+	album_name VARCHAR,
+	album_type VARCHAR,
+	release_date VARCHAR
+	)sortkey(album_id);
+
+CREATE TABLE IF NOT EXISTS regions (
+	region_id INTEGER IDENTITY(1, 1),
+	region_name VARCHAR
+	)sortkey(region_id);
