@@ -102,7 +102,7 @@ class SqlQueries:
         FROM streams_staging
         WHERE date = '{date}';
 
-        INSERT INTO tracks (
+        INSERT INTO artists (
             artist_name
             )
         SELECT
@@ -139,7 +139,7 @@ class SqlQueries:
             temp.album_name,
             temp.album_type,
             temp.release_date
-        FROM album_temp temp
+        FROM albums_temp temp
         LEFT JOIN albums og
             ON temp.album_name = og.album_name
             AND temp.album_type = og.album_type
@@ -190,7 +190,7 @@ class SqlQueries:
         LEFT JOIN albums al
             ON al.album_name = tt.album_name
             AND al.album_type = tt.album_type
-        LEFT JOIN region r
+        LEFT JOIN regions r
             ON r.region_name = ss.region
         WHERE ss.date = '{date}'
         ORDER BY ss.position;
